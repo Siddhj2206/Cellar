@@ -1,9 +1,13 @@
 use anyhow::Result;
 use clap::Parser;
 
-mod cli;
-mod config;
-mod utils;
+pub mod cli;
+pub mod config;
+pub mod utils;
+pub mod runners;
+
+#[cfg(test)]
+mod tests;
 
 use cli::commands::Commands;
 
@@ -16,7 +20,8 @@ struct Cli {
     command: Commands,
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -42,6 +47,12 @@ fn main() -> Result<()> {
         }
         Commands::Status { name } => {
             cli::commands::show_status(name)?;
+        }
+        Commands::Runners { command } => {
+            cli::commands::handle_runners_command(command).await?;
+        }
+        Commands::Prefix { command } => {
+            cli::commands::handle_prefix_command(command).await?;
         }
     }
 

@@ -13,6 +13,7 @@ pub struct CellarDirectories {
     pub presets_dir: PathBuf,
     pub deps_dir: PathBuf,
     pub applications_dir: PathBuf,
+    pub cache_dir: PathBuf,
 }
 
 impl CellarDirectories {
@@ -22,6 +23,7 @@ impl CellarDirectories {
 
         let base_dir = home_dir.join(".local").join("share").join("cellar");
         let applications_dir = home_dir.join(".local").join("share").join("applications");
+        let cache_dir = base_dir.join("cache");
 
         let dirs = CellarDirectories {
             runners_dir: base_dir.join("runners"),
@@ -34,6 +36,7 @@ impl CellarDirectories {
             deps_dir: base_dir.join("deps"),
             base_dir,
             applications_dir,
+            cache_dir,
         };
 
         Ok(dirs)
@@ -50,6 +53,7 @@ impl CellarDirectories {
         self.ensure_dir_exists(&self.presets_dir)?;
         self.ensure_dir_exists(&self.deps_dir)?;
         self.ensure_dir_exists(&self.applications_dir)?;
+        self.ensure_dir_exists(&self.cache_dir)?;
 
         // Create subdirectories
         self.ensure_dir_exists(&self.runners_dir.join("proton"))?;
@@ -115,9 +119,21 @@ impl CellarDirectories {
         games.sort();
         Ok(games)
     }
+
+    pub fn get_runners_path(&self) -> PathBuf {
+        self.runners_dir.clone()
+    }
+
+    pub fn get_prefixes_path(&self) -> PathBuf {
+        self.prefixes_dir.clone()
+    }
+
+    pub fn get_cache_path(&self) -> PathBuf {
+        self.cache_dir.clone()
+    }
 }
 
-fn sanitize_filename(name: &str) -> String {
+pub fn sanitize_filename(name: &str) -> String {
     name.chars()
         .map(|c| match c {
             '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
@@ -128,16 +144,4 @@ fn sanitize_filename(name: &str) -> String {
         .trim()
         .to_lowercase()
         .replace(' ', "_")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_sanitize_filename() {
-        assert_eq!(sanitize_filename("My Game"), "my_game");
-        assert_eq!(sanitize_filename("Game: The Sequel"), "game__the_sequel");
-        assert_eq!(sanitize_filename("Game/Part\\Two"), "game_part_two");
-    }
 }
