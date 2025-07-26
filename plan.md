@@ -101,7 +101,11 @@ fsync = true
 dxvk = true
 dxvk_async = true
 large_address_aware = false
-wineserver_kill_timeout = 15
+wineserver_kill_timeout = 5
+
+[dxvk]
+hud = "devinfo,fps" # DXVK_HUD environment variable
+# Note: DXVK_STATE_CACHE_PATH will be managed automatically by Cellar.
 
 [gamescope]
 enabled = true
@@ -197,19 +201,36 @@ cellar config my-game esync=false dxvk=true
 ### Prefix Management
 ```bash
 # Prefix operations
-cellar prefix create <prefix-name>        # Create standalone prefix
+cellar prefix create <prefix-name> [--proton <version>] # Create standalone prefix
 cellar prefix list                        # List all prefixes
 cellar prefix remove <prefix-name>        # Remove prefix
 cellar prefix run <prefix-name> <exe>     # Run executable in prefix
+
+# Proton Prefix Creation Workflow
+# When --proton is used, Cellar orchestrates the prefix creation:
+# 1. Locate Runner: Find the path to the specified Proton version.
+# 2. Set Environment: Construct environment variables:
+#    - PROTONPATH: Path to the Proton installation.
+#    - WINEPREFIX: The full path to the new prefix directory.
+#    - WINEARCH: Hardcoded to `win64`.
+#    - PROTON_VERB: Set to `waitforexitandrun` to trigger initialization.
+# 3. Execute: Run `umu-run` with a command like `wineboot` to start creation.
 ```
 
 ### Runner Management
 ```bash
 # Download and manage runners
 cellar runners list                       # Show installed runners
+cellar runners refresh                    # Re-scan for local runners
 cellar runners available                  # Show available downloads
 cellar runners install proton <version>  # Install Proton-GE version
 cellar runners install dxvk <version>    # Install DXVK version
+cellar runners install vkd3d <version>   # Install vkd3d-proton version
+
+# Runner Discovery Logic
+# - Scans default Steam directory (~/.steam/steam/steamapps/common/)
+# - Scans a local Cellar directory (~/.local/share/cellar/runners/)
+# - Caches discovered runner paths for fast lookups.
 ```
 
 ### Desktop Integration
@@ -563,23 +584,24 @@ cellar validate --all
    - Simple game launching without runners
 
 ### Phase 2: Runner Management
-4. **Proton-GE Integration**
-   - GitHub API integration for release fetching
-   - Download and extraction functionality
-   - Local installation management
+4. **Runner Discovery and Management**
+   - Implement runner discovery for local Wine and Proton installations.
+   - Implement caching for discovered runners.
+   - Build `cellar runners list` and `cellar runners refresh` commands.
+   - Implement `cellar runners install` to download and extract runners.
 
 5. **DXVK Integration**
-   - DXVK version downloading and management
-   - Integration with Proton installations
+   - DXVK version downloading and management.
+   - Integration with Proton installations.
 
 6. **Wine Prefix Management**
-   - Wine prefix creation and validation
-   - Prefix configuration and management
+   - Implement `cellar prefix create`, including the Proton creation workflow using `umu`.
+   - Implement `cellar prefix delete`, `list`, and `run` commands.
 
 ### Phase 3: Launch System
 7. **umu-launcher Integration**
    - Command construction with local runners
-   - Environment variable management
+   - Environment variable management (including custom variables and DLL overrides)
    - Steam-style launch command processing
 
 8. **Advanced Configuration**
@@ -589,7 +611,8 @@ cellar validate --all
 
 ### Phase 4: Installation and Desktop Features
 9. **Manual Installation Workflow**
-   - Prefix creation for installations
+   - Implement `cellar install` to run installers within a prefix.
+   - Implement desktop shortcut and symlink creation.
    - Installer launching and monitoring
    - Post-installation executable detection
 
@@ -674,21 +697,24 @@ tar = "0.4"                     # Archive extraction
 flate2 = "1.0"                  # Compression support
 ```
 
+### Runtime Dependencies
+- **`umu`:** Required for launching games with Proton. Users will need to have this installed and available in their `PATH`.
+
 ## Launch Command Construction
 
 ### Without Gamescope
 ```bash
-WINEESYNC=1 WINEFSYNC=1 DXVK_ASYNC=1 PROTON_ENABLE_WAYLAND=1 gamemoderun umu-run --proton ./local/share/cellar/runners/proton/GE-Proton8-32 --prefix ./local/share/cellar/prefixes/game_name /path/to/game.exe --windowed --dx11
+WINEESYNC=1 WINEFSYNC=1 DXVK_ASYNC=1 PROTON_ENABLE_WAYLAND=1 gamemoderun umu-run --proton /path/to/proton --prefix /path/to/prefix /path/to/game.exe --windowed --dx11
 ```
 
 ### With MangoHUD
 ```bash
-MANGOHUD=1 WINEESYNC=1 WINEFSYNC=1 DXVK_ASYNC=1 PROTON_ENABLE_WAYLAND=1 gamemoderun umu-run --proton ./local/share/cellar/runners/proton/GE-Proton8-32 --prefix ./local/share/cellar/prefixes/game_name /path/to/game.exe --windowed --dx11
+MANGOHUD=1 WINEESYNC=1 WINEFSYNC=1 DXVK_ASYNC=1 PROTON_ENABLE_WAYLAND=1 gamemoderun umu-run --proton /path/to/proton --prefix /path/to/prefix /path/to/game.exe --windowed --dx11
 ```
 
 ### With Both Gamescope and MangoHUD
 ```bash
-MANGOHUD=1 WINEESYNC=1 WINEFSYNC=1 DXVK_ASYNC=1 PROTON_ENABLE_WAYLAND=1 gamemoderun gamescope -w 1920 -h 1080 -r 60 -U -f -- umu-run --proton ./local/share/cellar/runners/proton/GE-Proton8-32 --prefix ./local/share/cellar/prefixes/game_name /path/to/game.exe --windowed --dx11
+MANGOHUD=1 WINEESYNC=1 WINEFSYNC=1 DXVK_ASYNC=1 PROTON_ENABLE_WAYLAND=1 gamemoderun gamescope -w 1920 -h 1080 -r 60 -U -f -- umu-run --proton /path/to/proton --prefix /path/to/prefix /path/to/game.exe --windowed --dx11
 ```
 
 ### Steam-style Command Processing
