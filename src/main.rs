@@ -1,5 +1,5 @@
-use clap::Parser;
 use anyhow::Result;
+use clap::Parser;
 
 mod cli;
 mod config;
@@ -18,9 +18,14 @@ struct Cli {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    
+
     match cli.command {
-        Commands::Add { name, exe, installer, interactive } => {
+        Commands::Add {
+            name,
+            exe,
+            installer,
+            interactive,
+        } => {
             cli::commands::add_game(name, exe, installer, interactive)?;
         }
         Commands::Launch { name } => {
@@ -39,6 +44,6 @@ fn main() -> Result<()> {
             cli::commands::show_status(name)?;
         }
     }
-    
+
     Ok(())
 }

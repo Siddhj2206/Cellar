@@ -17,12 +17,12 @@ pub struct CellarDirectories {
 
 impl CellarDirectories {
     pub fn new() -> Result<Self> {
-        let home_dir = dirs::home_dir()
-            .ok_or_else(|| anyhow!("Unable to determine home directory"))?;
-        
+        let home_dir =
+            dirs::home_dir().ok_or_else(|| anyhow!("Unable to determine home directory"))?;
+
         let base_dir = home_dir.join(".local").join("share").join("cellar");
         let applications_dir = home_dir.join(".local").join("share").join("applications");
-        
+
         let dirs = CellarDirectories {
             runners_dir: base_dir.join("runners"),
             prefixes_dir: base_dir.join("prefixes"),
@@ -35,10 +35,10 @@ impl CellarDirectories {
             base_dir,
             applications_dir,
         };
-        
+
         Ok(dirs)
     }
-    
+
     pub fn ensure_all_exist(&self) -> Result<()> {
         self.ensure_dir_exists(&self.base_dir)?;
         self.ensure_dir_exists(&self.runners_dir)?;
@@ -50,17 +50,17 @@ impl CellarDirectories {
         self.ensure_dir_exists(&self.presets_dir)?;
         self.ensure_dir_exists(&self.deps_dir)?;
         self.ensure_dir_exists(&self.applications_dir)?;
-        
+
         // Create subdirectories
         self.ensure_dir_exists(&self.runners_dir.join("proton"))?;
         self.ensure_dir_exists(&self.runners_dir.join("dxvk"))?;
         self.ensure_dir_exists(&self.deps_dir.join("vcredist"))?;
         self.ensure_dir_exists(&self.deps_dir.join("dotnet"))?;
         self.ensure_dir_exists(&self.deps_dir.join("directx"))?;
-        
+
         Ok(())
     }
-    
+
     pub fn ensure_dir_exists(&self, path: &Path) -> Result<()> {
         if !path.exists() {
             fs::create_dir_all(path)
@@ -68,35 +68,42 @@ impl CellarDirectories {
         }
         Ok(())
     }
-    
+
     pub fn get_game_config_path(&self, game_name: &str) -> PathBuf {
-        self.configs_dir.join(format!("{}.toml", sanitize_filename(game_name)))
+        self.configs_dir
+            .join(format!("{}.toml", sanitize_filename(game_name)))
     }
-    
+
     pub fn get_game_prefix_path(&self, game_name: &str) -> PathBuf {
         self.prefixes_dir.join(sanitize_filename(game_name))
     }
-    
+
+    #[allow(dead_code)]
     pub fn get_game_icon_path(&self, game_name: &str, extension: &str) -> PathBuf {
-        self.icons_dir.join(format!("{}.{}", sanitize_filename(game_name), extension))
+        self.icons_dir
+            .join(format!("{}.{}", sanitize_filename(game_name), extension))
     }
-    
+
+    #[allow(dead_code)]
     pub fn get_game_shortcut_path(&self, game_name: &str) -> PathBuf {
-        self.shortcuts_dir.join(format!("{}.desktop", sanitize_filename(game_name)))
+        self.shortcuts_dir
+            .join(format!("{}.desktop", sanitize_filename(game_name)))
     }
-    
+
+    #[allow(dead_code)]
     pub fn get_symlink_path(&self, game_name: &str) -> PathBuf {
-        self.applications_dir.join(format!("cellar-{}.desktop", sanitize_filename(game_name)))
+        self.applications_dir
+            .join(format!("cellar-{}.desktop", sanitize_filename(game_name)))
     }
-    
+
     pub fn list_game_configs(&self) -> Result<Vec<String>> {
         let mut games = Vec::new();
-        
+
         if self.configs_dir.exists() {
             for entry in fs::read_dir(&self.configs_dir)? {
                 let entry = entry?;
                 let path = entry.path();
-                
+
                 if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("toml") {
                     if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
                         games.push(stem.to_string());
@@ -104,7 +111,7 @@ impl CellarDirectories {
                 }
             }
         }
-        
+
         games.sort();
         Ok(games)
     }
@@ -126,7 +133,7 @@ fn sanitize_filename(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_sanitize_filename() {
         assert_eq!(sanitize_filename("My Game"), "my_game");

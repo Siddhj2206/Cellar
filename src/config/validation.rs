@@ -18,9 +18,12 @@ pub fn validate_game_config(config: &GameConfig) -> Result<()> {
     }
 
     // Validate wine prefix path
-    let prefix_parent = config.game.wine_prefix.parent()
+    let prefix_parent = config
+        .game
+        .wine_prefix
+        .parent()
         .ok_or_else(|| anyhow!("Invalid wine prefix path"))?;
-    
+
     if !prefix_parent.exists() {
         return Err(anyhow!(
             "Wine prefix parent directory does not exist: {}",
@@ -82,19 +85,21 @@ fn validate_desktop_config(config: &super::game::DesktopConfig) -> Result<()> {
 
     if let Some(icon_path) = &config.icon_path {
         if !icon_path.exists() {
-            return Err(anyhow!(
-                "Icon file does not exist: {}",
-                icon_path.display()
-            ));
+            return Err(anyhow!("Icon file does not exist: {}", icon_path.display()));
         }
     }
 
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn validate_file_path(path: &Path, description: &str) -> Result<()> {
     if !path.exists() {
-        return Err(anyhow!("{} does not exist: {}", description, path.display()));
+        return Err(anyhow!(
+            "{} does not exist: {}",
+            description,
+            path.display()
+        ));
     }
 
     if !path.is_file() {
@@ -104,14 +109,54 @@ pub fn validate_file_path(path: &Path, description: &str) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn validate_directory_path(path: &Path, description: &str) -> Result<()> {
     if !path.exists() {
-        return Err(anyhow!("{} does not exist: {}", description, path.display()));
+        return Err(anyhow!(
+            "{} does not exist: {}",
+            description,
+            path.display()
+        ));
     }
 
     if !path.is_dir() {
-        return Err(anyhow!("{} is not a directory: {}", description, path.display()));
+        return Err(anyhow!(
+            "{} is not a directory: {}",
+            description,
+            path.display()
+        ));
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_validate_file_path() {
+        let temp_file = "/tmp/test_validate_file.txt";
+        fs::write(temp_file, "test").unwrap();
+
+        assert!(validate_file_path(&PathBuf::from(temp_file), "Test file").is_ok());
+        assert!(
+            validate_file_path(&PathBuf::from("/nonexistent/file.txt"), "Nonexistent file")
+                .is_err()
+        );
+
+        fs::remove_file(temp_file).ok();
+    }
+
+    #[test]
+    fn test_validate_directory_path() {
+        assert!(validate_directory_path(&PathBuf::from("/tmp"), "Temp directory").is_ok());
+        assert!(validate_directory_path(
+            &PathBuf::from("/nonexistent/dir"),
+            "Nonexistent directory"
+        )
+        .is_err());
+    }
 }
