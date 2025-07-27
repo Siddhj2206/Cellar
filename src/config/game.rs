@@ -36,8 +36,7 @@ pub struct GameInfo {
     pub preset: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LaunchConfig {
     #[serde(default)]
     pub launch_options: String,
@@ -190,7 +189,6 @@ fn default_keywords() -> Vec<String> {
 fn default_comment() -> String {
     "Windows game via Cellar".to_string()
 }
-
 
 impl Default for WineConfig {
     fn default() -> Self {

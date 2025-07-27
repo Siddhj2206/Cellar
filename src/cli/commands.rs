@@ -8,10 +8,10 @@ use crate::config::game::{
     MangohudConfig, WineConfig,
 };
 use crate::config::validation::validate_game_config;
-use crate::utils::fs::CellarDirectories;
-use crate::runners::RunnerManager;
-use crate::runners::proton::ProtonManager;
 use crate::runners::dxvk::DxvkManager;
+use crate::runners::proton::ProtonManager;
+use crate::runners::RunnerManager;
+use crate::utils::fs::CellarDirectories;
 
 #[derive(Subcommand)]
 pub enum Commands {
@@ -85,6 +85,13 @@ pub enum RunnerCommands {
         /// Prefix name to install into
         prefix: String,
     },
+    /// Remove/uninstall a runner
+    Remove {
+        /// Runner type (proton, dxvk)
+        runner_type: String,
+        /// Version to remove
+        version: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -110,6 +117,9 @@ pub enum PrefixCommands {
         prefix: String,
         /// Path to executable
         exe: String,
+        /// Proton version to use (optional, autodetects if not provided)
+        #[arg(long)]
+        proton: Option<String>,
     },
 }
 
@@ -351,12 +361,17 @@ pub async fn handle_runners_command(command: RunnerCommands) -> Result<()> {
         RunnerCommands::List => list_runners().await,
         RunnerCommands::Refresh => refresh_runners().await,
         RunnerCommands::Available => show_available_runners().await,
-        RunnerCommands::Install { runner_type, version } => {
-            install_runner(&runner_type, &version).await
-        }
+        RunnerCommands::Install {
+            runner_type,
+            version,
+        } => install_runner(&runner_type, &version).await,
         RunnerCommands::InstallDxvk { version, prefix } => {
             install_dxvk_to_prefix(&version, &prefix).await
         }
+        RunnerCommands::Remove {
+            runner_type,
+            version,
+        } => remove_runner(&runner_type, &version).await,
     }
 }
 
@@ -364,7 +379,7 @@ async fn list_runners() -> Result<()> {
     let dirs = CellarDirectories::new()?;
     dirs.ensure_all_exist()?; // Ensure all directories exist
     let cache_path = dirs.get_cache_path().join("runners.toml");
-    
+
     // Try to load from cache first
     if cache_path.exists() {
         if let Ok(cache_content) = fs::read_to_string(&cache_path) {
@@ -373,15 +388,19 @@ async fn list_runners() -> Result<()> {
                 let cache_age = chrono::Utc::now().signed_duration_since(cache.last_updated);
                 if cache_age.num_hours() < 1 {
                     println!("Installed Runners (cached):");
-                    
-                    let proton_runners: Vec<_> = cache.runners.iter()
+
+                    let proton_runners: Vec<_> = cache
+                        .runners
+                        .iter()
                         .filter(|r| matches!(r.runner_type, crate::runners::RunnerType::Proton))
                         .collect();
-                    
-                    let dxvk_runners: Vec<_> = cache.runners.iter()
+
+                    let dxvk_runners: Vec<_> = cache
+                        .runners
+                        .iter()
                         .filter(|r| matches!(r.runner_type, crate::runners::RunnerType::Dxvk))
                         .collect();
-                    
+
                     if !proton_runners.is_empty() {
                         println!("\nProton Runners:");
                         for runner in &proton_runners {
@@ -389,7 +408,7 @@ async fn list_runners() -> Result<()> {
                             println!("    Path: {}", runner.path.display());
                         }
                     }
-                    
+
                     if !dxvk_runners.is_empty() {
                         println!("\nDXVK Runners:");
                         for runner in &dxvk_runners {
@@ -397,25 +416,27 @@ async fn list_runners() -> Result<()> {
                             println!("    Path: {}", runner.path.display());
                         }
                     }
-                    
+
                     if proton_runners.is_empty() && dxvk_runners.is_empty() {
-                        println!("  No runners found. Use 'cellar runners install' to install runners.");
+                        println!(
+                            "  No runners found. Use 'cellar runners install' to install runners."
+                        );
                     }
-                    
+
                     return Ok(());
                 }
             }
         }
     }
-    
+
     // Cache is old or doesn't exist, scan live
     let runners_path = dirs.get_runners_path();
-    
+
     let proton_manager = ProtonManager::new(runners_path.clone());
     let dxvk_manager = DxvkManager::new(runners_path);
-    
+
     println!("Installed Runners:");
-    
+
     // List Proton runners
     let proton_runners = proton_manager.discover_local_runners().await?;
     if !proton_runners.is_empty() {
@@ -425,7 +446,7 @@ async fn list_runners() -> Result<()> {
             println!("    Path: {}", runner.path.display());
         }
     }
-    
+
     // List DXVK runners
     let dxvk_runners = dxvk_manager.discover_local_runners().await?;
     if !dxvk_runners.is_empty() {
@@ -435,11 +456,11 @@ async fn list_runners() -> Result<()> {
             println!("    Path: {}", runner.path.display());
         }
     }
-    
+
     if proton_runners.is_empty() && dxvk_runners.is_empty() {
         println!("  No runners found. Use 'cellar runners install' to install runners.");
     }
-    
+
     Ok(())
 }
 
@@ -447,49 +468,53 @@ async fn refresh_runners() -> Result<()> {
     let dirs = CellarDirectories::new()?;
     dirs.ensure_all_exist()?; // Ensure all directories exist including cache
     let cache_path = dirs.get_cache_path().join("runners.toml");
-    
+
     // Remove existing cache
     if cache_path.exists() {
         fs::remove_file(&cache_path)?;
     }
-    
+
     println!("Refreshing runner cache...");
-    
+
     // Discover all runners and cache them
     let runners_path = dirs.get_runners_path();
     let proton_manager = ProtonManager::new(runners_path.clone());
     let dxvk_manager = DxvkManager::new(runners_path);
-    
+
     let mut all_runners = Vec::new();
     all_runners.extend(proton_manager.discover_local_runners().await?);
     all_runners.extend(dxvk_manager.discover_local_runners().await?);
-    
+
     // Save to cache
     let cache = crate::runners::RunnerCache {
         runners: all_runners,
         last_updated: chrono::Utc::now(),
     };
-    
+
     let cache_content = toml::to_string_pretty(&cache)?;
     fs::write(&cache_path, cache_content)?;
-    
-    println!("Runner cache refreshed with {} runners.", cache.runners.len());
-    
+
+    println!(
+        "Runner cache refreshed with {} runners.",
+        cache.runners.len()
+    );
+
     Ok(())
 }
 
 async fn show_available_runners() -> Result<()> {
     let dirs = CellarDirectories::new()?;
     let runners_path = dirs.get_runners_path();
-    
+
     println!("Fetching available runners...");
-    
+
     // Get available Proton versions
     let proton_manager = ProtonManager::new(runners_path.clone());
     match proton_manager.get_available_versions().await {
         Ok(versions) => {
             println!("\nAvailable Proton-GE versions:");
-            for version in versions.iter().take(10) { // Show first 10
+            for version in versions.iter().take(10) {
+                // Show first 10
                 println!("  {version}");
             }
             if versions.len() > 10 {
@@ -498,13 +523,14 @@ async fn show_available_runners() -> Result<()> {
         }
         Err(e) => println!("Failed to fetch Proton versions: {e}"),
     }
-    
+
     // Get available DXVK versions
     let dxvk_manager = DxvkManager::new(runners_path);
     match dxvk_manager.get_available_versions().await {
         Ok(versions) => {
             println!("\nAvailable DXVK versions:");
-            for version in versions.iter().take(10) { // Show first 10
+            for version in versions.iter().take(10) {
+                // Show first 10
                 println!("  {version}");
             }
             if versions.len() > 10 {
@@ -513,38 +539,90 @@ async fn show_available_runners() -> Result<()> {
         }
         Err(e) => println!("Failed to fetch DXVK versions: {e}"),
     }
-    
+
     Ok(())
 }
 
 async fn install_runner(runner_type: &str, version: &str) -> Result<()> {
     let dirs = CellarDirectories::new()?;
     let runners_path = dirs.get_runners_path();
-    
+
     match runner_type.to_lowercase().as_str() {
         "proton" => {
             println!("Installing Proton-GE {version}...");
             let proton_manager = ProtonManager::new(runners_path);
-            
+
             let download_path = proton_manager.download_runner("proton-ge", version).await?;
-            proton_manager.install_runner(&download_path, Path::new("")).await?;
-            
+            proton_manager
+                .install_runner(&download_path, Path::new(""))
+                .await?;
+
             println!("Successfully installed Proton-GE {version}");
         }
         "dxvk" => {
             println!("Installing DXVK {version}...");
             let dxvk_manager = DxvkManager::new(runners_path);
-            
+
             let download_path = dxvk_manager.download_runner("dxvk", version).await?;
-            dxvk_manager.install_runner(&download_path, Path::new("")).await?;
-            
+            dxvk_manager
+                .install_runner(&download_path, Path::new(""))
+                .await?;
+
             println!("Successfully installed DXVK {version}");
         }
         _ => {
-            return Err(anyhow!("Unsupported runner type: {}. Supported types: proton, dxvk", runner_type));
+            return Err(anyhow!(
+                "Unsupported runner type: {}. Supported types: proton, dxvk",
+                runner_type
+            ));
         }
     }
-    
+
+    Ok(())
+}
+
+async fn remove_runner(runner_type: &str, version: &str) -> Result<()> {
+    let dirs = CellarDirectories::new()?;
+    let runners_path = dirs.get_runners_path();
+
+    match runner_type.to_lowercase().as_str() {
+        "proton" => {
+            println!("Removing Proton-GE {version}...");
+            let proton_manager = ProtonManager::new(runners_path);
+
+            let runners = proton_manager.discover_local_runners().await?;
+            let runner = runners
+                .iter()
+                .find(|r| r.version == version || r.name.contains(version))
+                .ok_or_else(|| anyhow!("Proton version '{}' not found", version))?;
+
+            proton_manager.delete_runner(&runner.path).await?;
+            println!("Successfully removed Proton-GE {version}");
+        }
+        "dxvk" => {
+            println!("Removing DXVK {version}...");
+            let dxvk_manager = DxvkManager::new(runners_path);
+
+            let runners = dxvk_manager.discover_local_runners().await?;
+            let runner = runners
+                .iter()
+                .find(|r| r.version == version || r.name.contains(version))
+                .ok_or_else(|| anyhow!("DXVK version '{}' not found", version))?;
+
+            dxvk_manager.delete_runner(&runner.path).await?;
+            println!("Successfully removed DXVK {version}");
+        }
+        _ => {
+            return Err(anyhow!(
+                "Unsupported runner type: {}. Supported types: proton, dxvk",
+                runner_type
+            ));
+        }
+    }
+
+    // Refresh cache after removal
+    refresh_runners().await?;
+
     Ok(())
 }
 
@@ -554,95 +632,115 @@ pub async fn handle_prefix_command(command: PrefixCommands) -> Result<()> {
         PrefixCommands::Create { name, proton } => create_prefix(&name, proton.as_deref()).await,
         PrefixCommands::List => list_prefixes().await,
         PrefixCommands::Remove { name } => remove_prefix(&name).await,
-        PrefixCommands::Run { prefix, exe } => run_in_prefix(&prefix, &exe).await,
+        PrefixCommands::Run { prefix, exe, proton } => run_in_prefix(&prefix, &exe, proton.as_deref()).await,
     }
 }
 
 async fn create_prefix(name: &str, proton_version: Option<&str>) -> Result<()> {
     let dirs = CellarDirectories::new()?;
     let prefix_path = dirs.get_prefixes_path().join(name);
-    
+
     if prefix_path.exists() {
         return Err(anyhow!("Prefix '{}' already exists", name));
     }
-    
+
     println!("Creating wine prefix: {name}");
-    
+
     if let Some(proton) = proton_version {
         // Create Proton prefix using umu
         println!("Using Proton version: {proton}");
-        
+
         let runners_path = dirs.get_runners_path();
         let proton_manager = ProtonManager::new(runners_path);
-        
+
         // Find the Proton installation
         let runners = proton_manager.discover_local_runners().await?;
         let proton_runner = runners.iter()
             .find(|r| r.version == proton || r.name.contains(proton))
             .ok_or_else(|| anyhow!("Proton version '{}' not found. Install it first with 'cellar runners install proton {}'", proton, proton))?;
-        
-        // Create prefix using umu-run
-        fs::create_dir_all(&prefix_path)?;
-        
+
+        println!("Initializing prefix...");
+
+        // Set up cache directories for Wine Mono and Gecko like Lutris does
+        let mono_cache = proton_runner.path.join("files/share/wine/mono");
+        let gecko_cache = proton_runner.path.join("files/share/wine/gecko");
+
         let output = tokio::process::Command::new("umu-run")
-            .env("PROTONPATH", &proton_runner.path)
-            .env("WINEPREFIX", &prefix_path)
             .env("WINEARCH", "win64")
-            .env("PROTON_VERB", "waitforexitandrun")
-            .arg("wineboot")
+            .env("WINEPREFIX", &prefix_path)
+            .env("WINEDLLOVERRIDES", "")
+            .env("WINE_MONO_CACHE_DIR", &mono_cache)
+            .env("WINE_GECKO_CACHE_DIR", &gecko_cache)
+            .env("PROTON_VERB", "run")
+            .env("PROTONPATH", &proton_runner.path)
+            .env("GAMEID", "umu-default")
+            .arg("createprefix")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
             .output()
             .await?;
-        
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(anyhow!("Failed to create Proton prefix: {}", stderr));
         }
+
+        // Create a marker file to remember this is a Proton prefix
+        let proton_marker = prefix_path.join("proton_version.txt");
+        fs::write(&proton_marker, format!("{}\n{}", proton, proton_runner.path.display()))?;
     } else {
         // Create basic wine prefix
         fs::create_dir_all(&prefix_path)?;
-        
+
+        println!("Initializing prefix...");
         let output = tokio::process::Command::new("wineboot")
             .env("WINEPREFIX", &prefix_path)
             .env("WINEARCH", "win64")
+            .env("WINEDEBUG", "-all") // Suppress all debug output
+            .env("WINEFSYNC", "1")
+            .env("WINEESYNC", "1")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null()) // Completely suppress stderr during creation
             .output()
             .await?;
-        
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(anyhow!("Failed to create wine prefix: {}", stderr));
         }
     }
-    
+
     println!("Successfully created prefix: {name}");
     println!("  Path: {}", prefix_path.display());
-    
+
     Ok(())
 }
 
 async fn list_prefixes() -> Result<()> {
     let dirs = CellarDirectories::new()?;
     let prefixes_path = dirs.get_prefixes_path();
-    
+
     if !prefixes_path.exists() {
         println!("No prefixes found.");
         return Ok(());
     }
-    
+
     println!("Wine Prefixes:");
-    
+
     let mut entries = fs::read_dir(&prefixes_path)?;
     let mut found_any = false;
-    
+
     while let Some(entry) = entries.next().transpose()? {
         let path = entry.path();
         if path.is_dir() {
-            let name = path.file_name()
+            let name = path
+                .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("invalid");
-            
+
             println!("  {name}");
             println!("    Path: {}", path.display());
-            
+
             // Check if it's a valid wine prefix
             let system32_path = path.join("drive_c/windows/system32");
             if system32_path.exists() {
@@ -650,59 +748,206 @@ async fn list_prefixes() -> Result<()> {
             } else {
                 println!("    Status: Incomplete");
             }
-            
+
             found_any = true;
         }
     }
-    
+
     if !found_any {
         println!("  No prefixes found.");
     }
-    
+
     Ok(())
 }
 
 async fn remove_prefix(name: &str) -> Result<()> {
     let dirs = CellarDirectories::new()?;
     let prefix_path = dirs.get_prefixes_path().join(name);
-    
+
     if !prefix_path.exists() {
         return Err(anyhow!("Prefix '{}' not found", name));
     }
-    
+
     println!("Removing prefix: {name}");
     fs::remove_dir_all(&prefix_path)?;
     println!("Successfully removed prefix: {name}");
-    
+
     Ok(())
 }
 
-async fn run_in_prefix(prefix: &str, exe: &str) -> Result<()> {
+async fn run_in_prefix(prefix: &str, exe: &str, proton_version: Option<&str>) -> Result<()> {
     let dirs = CellarDirectories::new()?;
     let prefix_path = dirs.get_prefixes_path().join(prefix);
-    
+
     if !prefix_path.exists() {
         return Err(anyhow!("Prefix '{}' not found", prefix));
     }
-    
+
     let exe_path = PathBuf::from(exe);
     if !exe_path.exists() {
         return Err(anyhow!("Executable not found: {}", exe));
     }
-    
+
     println!("Running {exe} in prefix {prefix}");
-    
-    let output = tokio::process::Command::new("wine")
-        .env("WINEPREFIX", &prefix_path)
-        .arg(exe)
-        .output()
-        .await?;
-    
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(anyhow!("Failed to run executable: {}", stderr));
+
+    if let Some(proton) = proton_version {
+        // Run using Proton via umu-run
+        println!("Using Proton version: {proton}");
+
+        let runners_path = dirs.get_runners_path();
+        let proton_manager = ProtonManager::new(runners_path);
+
+        // Find the Proton installation
+        let runners = proton_manager.discover_local_runners().await?;
+        let proton_runner = runners.iter()
+            .find(|r| r.version == proton || r.name.contains(proton))
+            .ok_or_else(|| anyhow!("Proton version '{}' not found. Install it first with 'cellar runners install proton {}'", proton, proton))?;
+
+        let child = tokio::process::Command::new("umu-run")
+            .env("WINEARCH", "win64")
+            .env("WINEPREFIX", &prefix_path)
+            .env("PROTONPATH", &proton_runner.path)
+            .env("PROTON_VERB", "waitforexitandrun")
+            .env("GAMEID", "umu-default")
+            .env("WINE_LARGE_ADDRESS_AWARE", "1")
+            .arg(&exe_path)
+            .stdout(std::process::Stdio::inherit())
+            .stderr(std::process::Stdio::piped())
+            .spawn()?;
+
+        let output = child.wait_with_output().await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            // Filter out Wine debug noise but show critical errors
+            let critical_errors: Vec<&str> = stderr
+                .lines()
+                .filter(|line| {
+                    let line_lower = line.to_lowercase();
+                    (line_lower.contains("error") || line_lower.contains("failed"))
+                        && !line.contains("fixme:")
+                        && !line.contains("err:setupapi:create_dest_file")
+                        && !line.contains("wine-staging")
+                        && !line.contains("experimental patches")
+                        && !line.contains("winediag:")
+                        && !line_lower.contains("stub")
+                        && !line.trim().is_empty()
+                })
+                .collect();
+
+            if !critical_errors.is_empty() {
+                return Err(anyhow!(
+                    "Execution failed with errors:\n{}",
+                    critical_errors.join("\n")
+                ));
+            }
+        }
+    } else {
+        // Check if this might be a Proton prefix by looking for proton-specific files
+        let proton_marker = prefix_path.join("proton_version.txt");
+        if proton_marker.exists() {
+            // Try to auto-detect Proton version from marker file
+            if let Ok(marker_content) = fs::read_to_string(&proton_marker) {
+                let lines: Vec<&str> = marker_content.lines().collect();
+                if let Some(version) = lines.first() {
+                    println!("Auto-detected Proton prefix (version: {version})");
+                    println!("Using Proton for execution...");
+                    
+                    let runners_path = dirs.get_runners_path();
+                    let proton_manager = ProtonManager::new(runners_path);
+                    let runners = proton_manager.discover_local_runners().await?;
+                    
+                    if let Some(proton_runner) = runners.iter().find(|r| r.version == *version || r.name.contains(version)) {
+                        let child = tokio::process::Command::new("umu-run")
+                            .env("WINEARCH", "win64")
+                            .env("WINEPREFIX", &prefix_path)
+                            .env("PROTONPATH", &proton_runner.path)
+                            .env("PROTON_VERB", "waitforexitandrun")
+                            .env("GAMEID", "umu-default")
+                            .env("WINE_LARGE_ADDRESS_AWARE", "1")
+                            .arg(&exe_path)
+                            .stdout(std::process::Stdio::inherit())
+                            .stderr(std::process::Stdio::piped())
+                            .spawn()?;
+
+                        let output = child.wait_with_output().await?;
+
+                        if !output.status.success() {
+                            let stderr = String::from_utf8_lossy(&output.stderr);
+                            let critical_errors: Vec<&str> = stderr
+                                .lines()
+                                .filter(|line| {
+                                    let line_lower = line.to_lowercase();
+                                    (line_lower.contains("error") || line_lower.contains("failed"))
+                                        && !line.contains("fixme:")
+                                        && !line.contains("err:setupapi:create_dest_file")
+                                        && !line.contains("wine-staging")
+                                        && !line.contains("experimental patches")
+                                        && !line.contains("winediag:")
+                                        && !line_lower.contains("stub")
+                                        && !line.trim().is_empty()
+                                })
+                                .collect();
+
+                            if !critical_errors.is_empty() {
+                                return Err(anyhow!(
+                                    "Execution failed with errors:\n{}",
+                                    critical_errors.join("\n")
+                                ));
+                            }
+                        }
+                        
+                        println!("Execution completed.");
+                        return Ok(());
+                    } else {
+                        println!("⚠ Proton version '{version}' not found, falling back to regular Wine");
+                    }
+                } else {
+                    println!("⚠ This appears to be a Proton prefix, but no Proton version specified.");
+                    println!("  Consider using: cellar prefix run {prefix} {exe} --proton <version>");
+                }
+            }
+        }
+
+        // Run using regular Wine
+        let child = tokio::process::Command::new("wine")
+            .env("WINEPREFIX", &prefix_path)
+            .env("WINEDEBUG", "-all,+dll,-setupapi")
+            .env("WINEFSYNC", "1")
+            .env("WINEESYNC", "1")
+            .arg(&exe_path)
+            .stdout(std::process::Stdio::inherit())
+            .stderr(std::process::Stdio::piped())
+            .spawn()?;
+
+        let output = child.wait_with_output().await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let critical_errors: Vec<&str> = stderr
+                .lines()
+                .filter(|line| {
+                    let line_lower = line.to_lowercase();
+                    (line_lower.contains("error") || line_lower.contains("failed"))
+                        && !line.contains("fixme:")
+                        && !line.contains("err:setupapi:create_dest_file")
+                        && !line.contains("wine-staging")
+                        && !line.contains("experimental patches")
+                        && !line.contains("winediag:")
+                        && !line_lower.contains("stub")
+                        && !line.trim().is_empty()
+                })
+                .collect();
+
+            if !critical_errors.is_empty() {
+                return Err(anyhow!(
+                    "Execution failed with errors:\n{}",
+                    critical_errors.join("\n")
+                ));
+            }
+        }
     }
-    
+
     println!("Execution completed.");
     Ok(())
 }
@@ -710,26 +955,28 @@ async fn run_in_prefix(prefix: &str, exe: &str) -> Result<()> {
 async fn install_dxvk_to_prefix(version: &str, prefix_name: &str) -> Result<()> {
     let dirs = CellarDirectories::new()?;
     let prefix_path = dirs.get_prefixes_path().join(prefix_name);
-    
+
     if !prefix_path.exists() {
         return Err(anyhow!("Prefix '{}' not found", prefix_name));
     }
-    
+
     let runners_path = dirs.get_runners_path();
     let dxvk_manager = DxvkManager::new(runners_path);
-    
+
     // Find the DXVK installation
     let runners = dxvk_manager.discover_local_runners().await?;
     let dxvk_runner = runners.iter()
         .find(|r| r.version == version || r.name.contains(version))
         .ok_or_else(|| anyhow!("DXVK version '{}' not found. Install it first with 'cellar runners install dxvk {}'", version, version))?;
-    
+
     println!("Installing DXVK {version} to prefix '{prefix_name}'...");
-    
+
     // Install DXVK DLLs to the prefix
-    dxvk_manager.install_dxvk_to_prefix(&dxvk_runner.path, &prefix_path).await?;
-    
+    dxvk_manager
+        .install_dxvk_to_prefix(&dxvk_runner.path, &prefix_path)
+        .await?;
+
     println!("Successfully installed DXVK {version} to prefix '{prefix_name}'");
-    
+
     Ok(())
 }

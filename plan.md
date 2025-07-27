@@ -201,20 +201,33 @@ cellar config my-game esync=false dxvk=true
 ### Prefix Management
 ```bash
 # Prefix operations
-cellar prefix create <prefix-name> [--proton <version>] # Create standalone prefix
+cellar prefix create <prefix-name> --proton <version> # Create standalone prefix
 cellar prefix list                        # List all prefixes
 cellar prefix remove <prefix-name>        # Remove prefix
-cellar prefix run <prefix-name> <exe>     # Run executable in prefix
+cellar prefix run <prefix-name> <exe> --proton <version> # Run executable in prefix
 
 # Proton Prefix Creation Workflow
-# When --proton is used, Cellar orchestrates the prefix creation:
+# When --proton is used, Cellar creates prefixes using the Lutris method:
 # 1. Locate Runner: Find the path to the specified Proton version.
 # 2. Set Environment: Construct environment variables:
-#    - PROTONPATH: Path to the Proton installation.
+#    - WINEARCH: Set to `win64`.
 #    - WINEPREFIX: The full path to the new prefix directory.
-#    - WINEARCH: Hardcoded to `win64`.
-#    - PROTON_VERB: Set to `waitforexitandrun` to trigger initialization.
-# 3. Execute: Run `umu-run` with a command like `wineboot` to start creation.
+#    - WINEDLLOVERRIDES: Empty string for clean setup.
+#    - WINE_MONO_CACHE_DIR: Points to Proton's mono cache.
+#    - WINE_GECKO_CACHE_DIR: Points to Proton's gecko cache.
+#    - PROTON_VERB: Set to `run` for prefix creation.
+#    - PROTONPATH: Path to the Proton installation.
+#    - GAMEID: Set to `umu-default`.
+# 3. Execute: Run `umu-run createprefix` to initialize the prefix.
+# 4. Marker: Create `proton_version.txt` to remember Proton version used.
+
+# Proton Execution
+# When running executables in Proton prefixes:
+# - Automatically detects Proton prefixes using `proton_version.txt` marker
+# - Uses `umu-run` with proper environment variables:
+#   - PROTON_VERB=waitforexitandrun for main execution
+#   - WINE_LARGE_ADDRESS_AWARE=1 for compatibility
+#   - Proper PROTONPATH and GAMEID settings
 ```
 
 ### Runner Management
@@ -225,7 +238,9 @@ cellar runners refresh                    # Re-scan for local runners
 cellar runners available                  # Show available downloads
 cellar runners install proton <version>  # Install Proton-GE version
 cellar runners install dxvk <version>    # Install DXVK version
-cellar runners install vkd3d <version>   # Install vkd3d-proton version
+cellar runners remove proton <version>   # Remove/uninstall Proton-GE version
+cellar runners remove dxvk <version>     # Remove/uninstall DXVK version
+cellar runners install-dxvk <version> <prefix> # Install DXVK into specific prefix
 
 # Runner Discovery Logic
 # - Scans default Steam directory (~/.steam/steam/steamapps/common/)
@@ -565,6 +580,116 @@ cellar doctor "Cyberpunk 2077"
 cellar validate --all
 ```
 
+## Implementation Status
+
+### ✅ Phase 1: Core Infrastructure (COMPLETED)
+1. **Project Setup** - ✅ DONE
+   - Cargo project with required dependencies
+   - CLI argument parsing with `clap`
+   - Basic project structure
+
+2. **Configuration System** - ✅ DONE
+   - TOML serialization/deserialization
+   - Configuration validation
+   - Directory structure management
+
+3. **Basic Game Management** - ✅ DONE
+   - Game creation and listing
+   - Configuration file management
+   - Simple game launching framework
+
+### ✅ Phase 2: Runner Management (COMPLETED)
+4. **Runner Discovery and Management** - ✅ DONE
+   - Runner discovery for local Proton and DXVK installations
+   - Caching system for discovered runners
+   - `cellar runners list` and `cellar runners refresh` commands
+   - `cellar runners install` for downloading and extracting runners
+   - `cellar runners remove` for uninstalling runners
+
+5. **DXVK Integration** - ✅ DONE
+   - DXVK version downloading and management
+   - `cellar runners install-dxvk` for installing DXVK into prefixes
+
+6. **Wine Prefix Management** - ✅ DONE
+   - `cellar prefix create` with proper Lutris-style Proton workflow using `umu-run createprefix`
+   - `cellar prefix remove`, `list`, and `run` commands
+   - Auto-detection of Proton prefixes with marker files
+   - Proper Proton execution using `umu-run` with correct environment variables
+
+### 🚧 Phase 3: Launch System (IN PROGRESS)
+7. **umu-launcher Integration** - ⚠️ PARTIAL
+   - ✅ Proton prefix execution with proper environment variables
+   - ✅ Command construction for prefix-based execution
+   - ❌ Steam-style launch command processing (`%command%` placeholder)
+   - ❌ Full game launching system
+
+8. **Advanced Configuration** - ❌ TODO
+   - Wine option configuration (esync, fsync, etc.)
+   - Environment variable management
+   - Launch argument processing
+
+### ❌ Phase 4: Installation and Desktop Features (TODO)
+9. **Manual Installation Workflow** - ❌ TODO
+10. **Desktop Integration** - ❌ TODO
+
+### ❌ Phase 5-9: Enhanced Features (TODO)
+All remaining phases are planned but not yet implemented.
+
+## Current Working Features
+
+### ✅ Implemented Commands
+```bash
+# Game Management (Basic)
+cellar add <game-name> --exe <path>       # Add existing game
+cellar list                               # List all games  
+cellar remove <game-name>                 # Remove game
+cellar info <game-name>                   # Show game info
+cellar status [game-name]                 # Show game status
+
+# Runner Management (Full)
+cellar runners list                       # Show installed runners
+cellar runners refresh                    # Re-scan runners
+cellar runners available                  # Show downloadable versions
+cellar runners install proton <version>  # Install Proton-GE
+cellar runners install dxvk <version>    # Install DXVK
+cellar runners remove proton <version>   # Remove Proton-GE
+cellar runners remove dxvk <version>     # Remove DXVK
+cellar runners install-dxvk <version> <prefix> # Install DXVK to prefix
+
+# Prefix Management (Full)
+cellar prefix create <name> --proton <version> # Create Proton prefix
+cellar prefix create <name>               # Create basic Wine prefix
+cellar prefix list                        # List all prefixes
+cellar prefix remove <name>               # Remove prefix
+cellar prefix run <prefix> <exe> --proton <version> # Run with explicit Proton
+cellar prefix run <prefix> <exe>          # Run with auto-detection
+```
+
+### 🔧 Technical Implementation Details
+
+**Prefix Creation (Lutris-Compatible):**
+- Uses `umu-run createprefix` for Proton prefixes
+- Proper cache directory setup for Wine Mono/Gecko
+- Creates `proton_version.txt` marker for auto-detection
+
+**Proton Execution (Lutris-Compatible):**
+- Uses `umu-run` with `PROTON_VERB=waitforexitandrun`
+- Proper environment variables: `WINE_LARGE_ADDRESS_AWARE=1`, `GAMEID=umu-default`
+- Auto-detection of Proton prefixes
+
+**Runner Management:**
+- Downloads from GitHub releases (Proton-GE, DXVK)
+- Local installation and caching
+- Integration with Steam's Proton installations
+- DXVK integration into Wine prefixes
+
+## Next Development Priorities
+
+1. **Complete Phase 3**: Steam-style launch system with `%command%` placeholder
+2. **Game Launching**: Full game launching with proper Proton integration
+3. **Manual Installation**: Installer workflow for new games
+4. **Desktop Integration**: .desktop file generation and shortcuts
+
 ## Implementation Plan
 
 ### Phase 1: Core Infrastructure
@@ -596,7 +721,7 @@ cellar validate --all
 
 6. **Wine Prefix Management**
    - Implement `cellar prefix create`, including the Proton creation workflow using `umu`.
-   - Implement `cellar prefix delete`, `list`, and `run` commands.
+   - Implement `cellar prefix remove`, `list`, and `run` commands.
 
 ### Phase 3: Launch System
 7. **umu-launcher Integration**

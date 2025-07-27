@@ -39,7 +39,8 @@ impl DxvkManager {
             while let Some(entry) = entries.next_entry().await? {
                 let path = entry.path();
                 if path.is_dir() {
-                    let name = path.file_name()
+                    let name = path
+                        .file_name()
                         .and_then(|n| n.to_str())
                         .unwrap_or("")
                         .to_string();
@@ -66,34 +67,46 @@ impl DxvkManager {
 
     fn extract_version_from_name(&self, name: &str) -> String {
         // Extract version from names like "v2.3.1" or "dxvk-2.3.1"
-        if let Some(captures) = regex::Regex::new(r"v?(\d+\.\d+(?:\.\d+)?)").unwrap().captures(name) {
-            captures.get(1).map_or(name.to_string(), |m| m.as_str().to_string())
+        if let Some(captures) = regex::Regex::new(r"v?(\d+\.\d+(?:\.\d+)?)")
+            .unwrap()
+            .captures(name)
+        {
+            captures
+                .get(1)
+                .map_or(name.to_string(), |m| m.as_str().to_string())
         } else {
             name.to_string()
         }
     }
 
     pub async fn download_dxvk(&self, version: &str) -> Result<PathBuf> {
-        let client = reqwest::Client::new();
-        
+        let client = reqwest::Client::builder()
+            .user_agent("curl/8.15.0")
+            .build()?;
+
         // Get release info from GitHub API
         let url = format!("https://api.github.com/repos/doitsujin/dxvk/releases/tags/v{version}");
         let response = client.get(&url).send().await?;
-        
+
         if !response.status().is_success() {
-            return Err(anyhow!("Failed to fetch release info for DXVK version {}", version));
+            return Err(anyhow!(
+                "Failed to fetch release info for DXVK version {}",
+                version
+            ));
         }
 
         let release: DxvkRelease = response.json().await?;
-        
+
         // Find the tar.gz asset
-        let asset = release.assets.iter()
+        let asset = release
+            .assets
+            .iter()
             .find(|a| a.name.ends_with(".tar.gz") && !a.name.contains("source"))
             .ok_or_else(|| anyhow!("No binary tar.gz asset found for DXVK version {}", version))?;
 
         // Download the asset
         let download_response = client.get(&asset.browser_download_url).send().await?;
-        
+
         if !download_response.status().is_success() {
             return Err(anyhow!("Failed to download {}", asset.name));
         }
@@ -101,7 +114,7 @@ impl DxvkManager {
         // Save to temporary file
         let temp_dir = std::env::temp_dir();
         let temp_file = temp_dir.join(&asset.name);
-        
+
         let bytes = download_response.bytes().await?;
         fs::write(&temp_file, bytes).await?;
 
@@ -131,7 +144,8 @@ impl DxvkManager {
             let extracted_dir = entry?.path();
             if extracted_dir.is_dir() {
                 // Move contents to final destination
-                self.move_directory_contents(&extracted_dir, &extract_path).await?;
+                self.move_directory_contents(&extracted_dir, &extract_path)
+                    .await?;
             }
         }
 
@@ -144,16 +158,16 @@ impl DxvkManager {
 
     async fn move_directory_contents(&self, src: &Path, dest: &Path) -> Result<()> {
         use std::collections::VecDeque;
-        
+
         let mut queue = VecDeque::new();
         queue.push_back((src.to_path_buf(), dest.to_path_buf()));
-        
+
         while let Some((src_dir, dest_dir)) = queue.pop_front() {
             let mut entries = fs::read_dir(&src_dir).await?;
             while let Some(entry) = entries.next_entry().await? {
                 let src_path = entry.path();
                 let dest_path = dest_dir.join(entry.file_name());
-                
+
                 if src_path.is_dir() {
                     fs::create_dir_all(&dest_path).await?;
                     queue.push_back((src_path, dest_path));
@@ -215,10 +229,11 @@ impl RunnerManager for DxvkManager {
 
     async fn install_runner(&self, download_path: &Path, _install_path: &Path) -> Result<()> {
         // Extract version from download path filename
-        let filename = download_path.file_name()
+        let filename = download_path
+            .file_name()
             .and_then(|n| n.to_str())
             .ok_or_else(|| anyhow!("Invalid download path"))?;
-        
+
         // Extract version (remove "dxvk-" prefix and ".tar.gz" suffix)
         let version = filename
             .strip_prefix("dxvk-")
@@ -227,26 +242,66 @@ impl RunnerManager for DxvkManager {
             .unwrap_or(filename)
             .strip_prefix("v")
             .unwrap_or(filename);
-            
+
         self.extract_dxvk(download_path, version).await?;
-        
+
         Ok(())
     }
 
     async fn get_available_versions(&self) -> Result<Vec<String>> {
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .user_agent("cellar/0.1.0")
+            .build()?;
         let url = "https://api.github.com/repos/doitsujin/dxvk/releases";
-        
+
         let response = client.get(url).send().await?;
         if !response.status().is_success() {
-            return Err(anyhow!("Failed to fetch available DXVK versions"));
+            return Err(anyhow!(
+                "Failed to fetch available DXVK versions: HTTP {}",
+                response.status()
+            ));
         }
 
-        let releases: Vec<DxvkRelease> = response.json().await?;
-        let versions = releases.into_iter()
-            .map(|r| r.tag_name.strip_prefix("v").unwrap_or(&r.tag_name).to_string())
+        let releases: Vec<DxvkRelease> = response
+            .json()
+            .await
+            .map_err(|e| anyhow!("Failed to parse GitHub API response: {}", e))?;
+        let versions = releases
+            .into_iter()
+            .map(|r| {
+                r.tag_name
+                    .strip_prefix("v")
+                    .unwrap_or(&r.tag_name)
+                    .to_string()
+            })
             .collect();
 
         Ok(versions)
+    }
+
+    async fn delete_runner(&self, runner_path: &Path) -> Result<()> {
+        if !runner_path.exists() {
+            return Err(anyhow!(
+                "Runner path does not exist: {}",
+                runner_path.display()
+            ));
+        }
+
+        if !runner_path.is_dir() {
+            return Err(anyhow!(
+                "Runner path is not a directory: {}",
+                runner_path.display()
+            ));
+        }
+
+        fs::remove_dir_all(runner_path).await.map_err(|e| {
+            anyhow!(
+                "Failed to delete runner at {}: {}",
+                runner_path.display(),
+                e
+            )
+        })?;
+
+        Ok(())
     }
 }

@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::config::validation::{validate_file_path, validate_directory_path};
+    use crate::config::validation::{validate_directory_path, validate_file_path};
     use std::fs;
     use std::path::PathBuf;
 

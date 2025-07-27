@@ -3,8 +3,8 @@ use clap::Parser;
 
 pub mod cli;
 pub mod config;
-pub mod utils;
 pub mod runners;
+pub mod utils;
 
 #[cfg(test)]
 mod tests;
