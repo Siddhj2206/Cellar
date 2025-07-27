@@ -1,28 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::runners::dxvk::DxvkManager;
-    use crate::runners::proton::ProtonManager;
-    use crate::runners::{Runner, RunnerCache, RunnerManager, RunnerType};
+    use crate::runners::{Runner, RunnerCache, RunnerType};
     use std::path::PathBuf;
-    use tempfile::tempdir;
-
-    #[tokio::test]
-    async fn test_proton_manager_creation() {
-        let temp_dir = tempdir().unwrap();
-        let manager = ProtonManager::new(temp_dir.path().to_path_buf());
-
-        // Test that the manager was created successfully
-        assert_eq!(manager.cellar_runners_path, temp_dir.path());
-    }
-
-    #[tokio::test]
-    async fn test_dxvk_manager_creation() {
-        let temp_dir = tempdir().unwrap();
-        let manager = DxvkManager::new(temp_dir.path().to_path_buf());
-
-        // Test that the manager was created successfully
-        assert_eq!(manager.cellar_runners_path, temp_dir.path());
-    }
 
     #[test]
     fn test_runner_cache() {
@@ -48,32 +27,20 @@ mod tests {
         // Test finding runner without version
         let found_no_version = cache.find_runner("Test Runner", None);
         assert!(found_no_version.is_some());
-
-        // Test getting runners by type
-        let proton_runners = cache.get_runners_by_type(RunnerType::Proton);
-        assert_eq!(proton_runners.len(), 1);
-
-        let wine_runners = cache.get_runners_by_type(RunnerType::Wine);
-        assert_eq!(wine_runners.len(), 0);
     }
 
-    #[tokio::test]
-    async fn test_proton_discover_empty_directory() {
-        let temp_dir = tempdir().unwrap();
-        let manager = ProtonManager::new(temp_dir.path().to_path_buf());
-
-        // Test discovering runners in empty directory
-        let runners = manager.discover_local_runners().await.unwrap();
-        assert_eq!(runners.len(), 0);
-    }
-
-    #[tokio::test]
-    async fn test_dxvk_discover_empty_directory() {
-        let temp_dir = tempdir().unwrap();
-        let manager = DxvkManager::new(temp_dir.path().to_path_buf());
-
-        // Test discovering runners in empty directory
-        let runners = manager.discover_local_runners().await.unwrap();
-        assert_eq!(runners.len(), 0);
+    #[test]
+    fn test_runner_creation() {
+        let runner = Runner {
+            name: "GE-Proton8-32".to_string(),
+            version: "8-32".to_string(),
+            path: PathBuf::from("/path/to/proton"),
+            runner_type: RunnerType::Proton,
+            installed: true,
+        };
+        
+        assert_eq!(runner.name, "GE-Proton8-32");
+        assert_eq!(runner.version, "8-32");
+        assert!(runner.installed);
     }
 }

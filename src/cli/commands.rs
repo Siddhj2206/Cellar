@@ -168,19 +168,9 @@ pub fn add_game(
     Ok(())
 }
 
-pub fn launch_game(name: String) -> Result<()> {
-    let dirs = CellarDirectories::new()?;
-    let config = load_game_config(&dirs, &name)?;
-
-    println!("Launching game: {name}");
-    println!("  Executable: {}", config.game.executable.display());
-    println!("  Wine Prefix: {}", config.game.wine_prefix.display());
-    println!("  Proton Version: {}", config.game.proton_version);
-
-    // TODO: Implement actual game launching logic
-    println!("Note: Actual launching not implemented in Phase 1");
-
-    Ok(())
+pub async fn launch_game(name: String) -> Result<()> {
+    let launcher = crate::launch::GameLauncher::new()?;
+    launcher.launch_game_by_name(&name).await
 }
 
 pub fn list_games() -> Result<()> {
@@ -685,9 +675,17 @@ async fn create_prefix(name: &str, proton_version: Option<&str>) -> Result<()> {
             return Err(anyhow!("Failed to create Proton prefix: {}", stderr));
         }
 
-        // Create a marker file to remember this is a Proton prefix
-        let proton_marker = prefix_path.join("proton_version.txt");
-        fs::write(&proton_marker, format!("{}\n{}", proton, proton_runner.path.display()))?;
+        // Verify the prefix was created successfully
+        let system32_path = prefix_path.join("drive_c/windows/system32");
+        if !system32_path.exists() {
+            return Err(anyhow!("Prefix creation appeared to succeed but system32 directory not found"));
+        }
+        
+        // Verify the version file was created by UMU
+        let version_file = prefix_path.join("version");
+        if !version_file.exists() {
+            return Err(anyhow!("Prefix creation succeeded but version file not found - may not be a proper Proton prefix"));
+        }
     } else {
         // Create basic wine prefix
         fs::create_dir_all(&prefix_path)?;
@@ -843,13 +841,13 @@ async fn run_in_prefix(prefix: &str, exe: &str, proton_version: Option<&str>) ->
             }
         }
     } else {
-        // Check if this might be a Proton prefix by looking for proton-specific files
-        let proton_marker = prefix_path.join("proton_version.txt");
-        if proton_marker.exists() {
-            // Try to auto-detect Proton version from marker file
-            if let Ok(marker_content) = fs::read_to_string(&proton_marker) {
-                let lines: Vec<&str> = marker_content.lines().collect();
-                if let Some(version) = lines.first() {
+        // Check if this might be a Proton prefix by looking for version file
+        let version_file = prefix_path.join("version");
+        if version_file.exists() {
+            // Try to auto-detect Proton version from version file
+            if let Ok(version_content) = fs::read_to_string(&version_file) {
+                let version = version_content.trim();
+                if !version.is_empty() {
                     println!("Auto-detected Proton prefix (version: {version})");
                     println!("Using Proton for execution...");
                     
@@ -857,7 +855,7 @@ async fn run_in_prefix(prefix: &str, exe: &str, proton_version: Option<&str>) ->
                     let proton_manager = ProtonManager::new(runners_path);
                     let runners = proton_manager.discover_local_runners().await?;
                     
-                    if let Some(proton_runner) = runners.iter().find(|r| r.version == *version || r.name.contains(version)) {
+                    if let Some(proton_runner) = runners.iter().find(|r| r.version == version || r.name.contains(version)) {
                         let child = tokio::process::Command::new("umu-run")
                             .env("WINEARCH", "win64")
                             .env("WINEPREFIX", &prefix_path)
@@ -903,7 +901,7 @@ async fn run_in_prefix(prefix: &str, exe: &str, proton_version: Option<&str>) ->
                         println!("⚠ Proton version '{version}' not found, falling back to regular Wine");
                     }
                 } else {
-                    println!("⚠ This appears to be a Proton prefix, but no Proton version specified.");
+                    println!("⚠ Version file exists but is empty or invalid.");
                     println!("  Consider using: cellar prefix run {prefix} {exe} --proton <version>");
                 }
             }

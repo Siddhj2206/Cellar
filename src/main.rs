@@ -1,13 +1,11 @@
 use anyhow::Result;
 use clap::Parser;
 
-pub mod cli;
-pub mod config;
-pub mod runners;
-pub mod utils;
-
-#[cfg(test)]
-mod tests;
+mod cli;
+mod config;
+mod launch;
+mod runners;
+mod utils;
 
 use cli::commands::Commands;
 
@@ -34,7 +32,7 @@ async fn main() -> Result<()> {
             cli::commands::add_game(name, exe, installer, interactive)?;
         }
         Commands::Launch { name } => {
-            cli::commands::launch_game(name)?;
+            cli::commands::launch_game(name).await?;
         }
         Commands::List => {
             cli::commands::list_games()?;

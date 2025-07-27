@@ -641,7 +641,7 @@ All remaining phases are planned but not yet implemented.
 ```bash
 # Game Management (Basic)
 cellar add <game-name> --exe <path>       # Add existing game
-cellar list                               # List all games  
+cellar list                               # List all games
 cellar remove <game-name>                 # Remove game
 cellar info <game-name>                   # Show game info
 cellar status [game-name]                 # Show game status
@@ -682,13 +682,6 @@ cellar prefix run <prefix> <exe>          # Run with auto-detection
 - Local installation and caching
 - Integration with Steam's Proton installations
 - DXVK integration into Wine prefixes
-
-## Next Development Priorities
-
-1. **Complete Phase 3**: Steam-style launch system with `%command%` placeholder
-2. **Game Launching**: Full game launching with proper Proton integration
-3. **Manual Installation**: Installer workflow for new games
-4. **Desktop Integration**: .desktop file generation and shortcuts
 
 ## Implementation Plan
 
@@ -752,45 +745,44 @@ cellar prefix run <prefix> <exe>          # Run with auto-detection
     - Resolution and scaling configuration
     - Display option management
 
-12. **Interactive Setup**
+12. **MangoHUD Integration**
+    - MangoHUD configuration management
+    - Performance overlay settings
+    - Custom MangoHUD config support
+
+13. **Interactive Setup**
     - User-friendly setup wizards
     - Configuration validation and preview
     - File browsing and path selection
 
 ### Phase 6: Template and Preset Systems
-13. **Template System**
+14. **Template System**
     - Pre-configured game type templates (FPS, Strategy, RPG)
     - Template creation and editing
     - Template application to games
 
-14. **Preset System**
+15. **Preset System**
     - Wine configuration presets (Gaming, Compatibility, Performance)
     - Preset creation and management
     - Easy preset application
 
-### Phase 7: Advanced Features
-15. **Dependency Management**
-    - Windows dependency detection and installation
-    - Visual C++ Redistributables, .NET Framework, DirectX
-    - Per-game dependency tracking
-
-16. **MangoHUD Integration**
-    - MangoHUD configuration management
-    - Performance overlay settings
-    - Custom MangoHUD config support
-
-### Phase 8: Utilities and Diagnostics
-17. **Temporary Execution**
+### Phase 7: Utilities and Diagnostics
+16. **Temporary Execution**
     - Prefix-based temporary execution
     - Utility command shortcuts (winetricks, winecfg, etc.)
     - Temporary prefix management
 
-18. **System Diagnostics**
+17. **System Diagnostics**
     - Comprehensive system health checking
     - Configuration validation and repair
     - Dependency verification
 
-### Phase 9: Polish and Testing
+18. **Dependency Management**
+    - Windows dependency detection and installation
+    - Visual C++ Redistributables, .NET Framework, DirectX
+    - Per-game dependency tracking
+
+### Phase 8: Polish and Testing
 19. **Error Handling and Validation**
     - Comprehensive error messages
     - Configuration validation
