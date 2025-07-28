@@ -54,4 +54,31 @@ mod tests {
         assert!(dirs.runners_dir.exists());
         assert!(dirs.prefixes_dir.exists());
     }
+
+    #[test]
+    fn test_expand_tilde() {
+        use crate::utils::fs::expand_tilde;
+        
+        // Test regular path (should remain unchanged)
+        let regular_path = "/usr/bin/ls";
+        let expanded = expand_tilde(regular_path).unwrap();
+        assert_eq!(expanded.to_string_lossy(), regular_path);
+        
+        // Test relative path (should remain unchanged)
+        let relative_path = "games/test.exe";
+        let expanded = expand_tilde(relative_path).unwrap();
+        assert_eq!(expanded.to_string_lossy(), relative_path);
+        
+        // Test tilde path
+        let tilde_path = "~/Documents/test.exe";
+        let expanded = expand_tilde(tilde_path).unwrap();
+        assert!(expanded.to_string_lossy().contains("Documents/test.exe"));
+        assert!(!expanded.to_string_lossy().contains("~"));
+        
+        // Test just tilde
+        let just_tilde = "~";
+        let expanded = expand_tilde(just_tilde).unwrap();
+        assert!(!expanded.to_string_lossy().contains("~"));
+        assert!(expanded.is_absolute());
+    }
 }

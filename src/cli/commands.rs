@@ -149,7 +149,7 @@ pub async fn add_game(
 
     let exe_path =
         exe.ok_or_else(|| anyhow!("Executable path is required for basic game addition"))?;
-    let exe_path = PathBuf::from(exe_path);
+    let exe_path = crate::utils::fs::expand_tilde(exe_path)?;
 
     if !exe_path.exists() {
         return Err(anyhow!("Executable does not exist: {}", exe_path.display()));
@@ -1071,7 +1071,7 @@ async fn run_in_prefix(prefix: &str, exe: &str, proton_version: Option<&str>) ->
         return Err(anyhow!("Prefix '{}' not found", prefix));
     }
 
-    let exe_path = PathBuf::from(exe);
+    let exe_path = crate::utils::fs::expand_tilde(exe)?;
     if !exe_path.exists() {
         return Err(anyhow!("Executable not found: {}", exe));
     }
