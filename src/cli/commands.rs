@@ -4,13 +4,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::config::game::{
-    DesktopConfig, GameConfig, GameInfo, GamescopeConfig, LaunchConfig,
-    MangohudConfig, WineConfig,
+    DesktopConfig, GameConfig, GameInfo, GamescopeConfig, LaunchConfig, MangohudConfig, WineConfig,
 };
 use crate::config::validation::validate_game_config;
 use crate::runners::dxvk::DxvkManager;
 use crate::runners::proton::ProtonManager;
-use crate::runners::{RunnerManager, RunnerCache, RunnerType};
+use crate::runners::{RunnerCache, RunnerManager, RunnerType};
 use crate::utils::fs::{sanitize_filename, CellarDirectories};
 
 #[derive(Subcommand)]
@@ -318,17 +317,17 @@ async fn create_basic_game_config(
     let proton_version = match proton_version {
         Some(version) => {
             println!("Using specified Proton version: {}", version);
-            
+
             // Check if the specified version is available locally
             let proton_manager = ProtonManager::new(dirs.get_runners_path());
             let local_runners = proton_manager.discover_local_runners().await?;
-            let version_found = local_runners.iter().any(|r| 
-                r.version == version || r.name.contains(version)
-            );
-            
+            let version_found = local_runners
+                .iter()
+                .any(|r| r.version == version || r.name.contains(version));
+
             if !version_found {
                 println!("Proton version '{}' not found locally.", version);
-                
+
                 // Check if version is available for download
                 match check_proton_version_available(&proton_manager, version).await {
                     Ok(download_version) => {
@@ -342,13 +341,13 @@ async fn create_basic_game_config(
                     }
                     Err(_) => {
                         return Err(anyhow!(
-                            "Proton version '{}' not found locally and not available for download.\nAvailable versions can be seen with: cellar runners available", 
+                            "Proton version '{}' not found locally and not available for download.\nAvailable versions can be seen with: cellar runners available",
                             version
                         ));
                     }
                 }
             }
-            
+
             version.to_string()
         }
         None => {
@@ -361,7 +360,6 @@ async fn create_basic_game_config(
 
     // Check if prefix exists, if not create it
     if !wine_prefix.exists() {
-        println!("Creating new prefix: {}", prefix_name);
         create_prefix(&prefix_name, Some(&proton_version)).await?;
     } else {
         println!("Using existing prefix: {}", prefix_name);
@@ -394,10 +392,10 @@ async fn create_basic_game_config(
 /// Get the latest available Proton version from cache, or discover if cache is missing/old
 async fn get_latest_proton_version(dirs: &CellarDirectories) -> Result<String> {
     let cache_path = dirs.get_cache_path().join("runners.toml");
-    
+
     // Try to load from cache first
     let mut proton_runners = Vec::new();
-    
+
     if cache_path.exists() {
         if let Ok(cache_content) = fs::read_to_string(&cache_path) {
             if let Ok(cache) = toml::from_str::<RunnerCache>(&cache_content) {
@@ -413,107 +411,128 @@ async fn get_latest_proton_version(dirs: &CellarDirectories) -> Result<String> {
             }
         }
     }
-    
+
     // If cache is empty or old, discover live
     if proton_runners.is_empty() {
         let runners_path = dirs.get_runners_path();
         let proton_manager = ProtonManager::new(runners_path);
         proton_runners = proton_manager.discover_local_runners().await?;
     }
-    
+
     if proton_runners.is_empty() {
         return Err(anyhow!(
             "No Proton versions found. Please install a Proton version first using:\n  cellar runners install proton <version>\n\nTo see available versions for download, use:\n  cellar runners available"
         ));
     }
-    
+
     // Sort versions to get the latest (assuming semantic versioning-like names)
     proton_runners.sort_by(|a, b| {
         // Extract version numbers for comparison (e.g., "GE-Proton9-1" -> "9.1")
         let version_a = extract_version_number(&a.version);
         let version_b = extract_version_number(&b.version);
-        version_b.partial_cmp(&version_a).unwrap_or(std::cmp::Ordering::Equal)
+        version_b
+            .partial_cmp(&version_a)
+            .unwrap_or(std::cmp::Ordering::Equal)
     });
-    
+
     Ok(proton_runners[0].version.clone())
 }
 
 /// Check if a Proton version is available for download
-async fn check_proton_version_available(proton_manager: &ProtonManager, version: &str) -> Result<String> {
+async fn check_proton_version_available(
+    proton_manager: &ProtonManager,
+    version: &str,
+) -> Result<String> {
     let available_versions = proton_manager.get_available_versions().await?;
-    
+
     // Try exact match first
     if available_versions.iter().any(|v| v == version) {
         return Ok(version.to_string());
     }
-    
+
     // Try partial match (e.g., user provides "9-1" for "GE-Proton9-1")
-    if let Some(found) = available_versions.iter().find(|v| 
-        v.contains(version) || v.ends_with(&format!("-{}", version))
-    ) {
+    if let Some(found) = available_versions
+        .iter()
+        .find(|v| v.contains(version) || v.ends_with(&format!("-{}", version)))
+    {
         return Ok(found.clone());
     }
-    
-    Err(anyhow!("Version '{}' not found in available releases", version))
+
+    Err(anyhow!(
+        "Version '{}' not found in available releases",
+        version
+    ))
 }
 
 /// Prompt user for permission to download a Proton version
 async fn prompt_user_for_download(version: &str) -> Result<bool> {
     use std::io::{self, Write};
-    
+
     print!("Download Proton version '{}'? [y/N]: ", version);
     io::stdout().flush()?;
-    
+
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
     let input = input.trim().to_lowercase();
-    
+
     Ok(input == "y" || input == "yes")
 }
 
 /// Download and install a Proton version
 async fn download_and_install_proton(proton_manager: &ProtonManager, version: &str) -> Result<()> {
     println!("Downloading Proton version: {}", version);
-    
-    let download_path = proton_manager.download_runner("proton-ge", version).await?;
+
+    // Extract the actual version number from the full version string
+    // e.g., "GE-Proton10-10" -> "10-10"
+    let version_number = if version.starts_with("GE-Proton") {
+        version.strip_prefix("GE-Proton").unwrap_or(version)
+    } else {
+        version
+    };
+
+    let download_path = proton_manager
+        .download_runner("proton-ge", version_number)
+        .await?;
     println!("Installing Proton version: {}", version);
-    
-    proton_manager.install_runner(&download_path, std::path::Path::new("")).await?;
-    
+
+    proton_manager
+        .install_runner(&download_path, std::path::Path::new(""))
+        .await?;
+
     // Refresh runner cache after installation
     let dirs = CellarDirectories::new()?;
     refresh_runners_cache(&dirs).await?;
-    
+
     Ok(())
 }
 
 /// Refresh runner cache without printing messages
 async fn refresh_runners_cache(dirs: &CellarDirectories) -> Result<()> {
     let cache_path = dirs.get_cache_path().join("runners.toml");
-    
+
     // Remove existing cache
     if cache_path.exists() {
         std::fs::remove_file(&cache_path)?;
     }
-    
+
     // Discover all runners and cache them
     let runners_path = dirs.get_runners_path();
     let proton_manager = ProtonManager::new(runners_path.clone());
     let dxvk_manager = DxvkManager::new(runners_path);
-    
+
     let mut all_runners = Vec::new();
     all_runners.extend(proton_manager.discover_local_runners().await?);
     all_runners.extend(dxvk_manager.discover_local_runners().await?);
-    
+
     // Save to cache
     let cache = crate::runners::RunnerCache {
         runners: all_runners,
         last_updated: chrono::Utc::now(),
     };
-    
+
     let cache_content = toml::to_string_pretty(&cache)?;
     std::fs::write(&cache_path, cache_content)?;
-    
+
     Ok(())
 }
 
@@ -529,15 +548,12 @@ pub fn extract_version_number(version: &str) -> f64 {
         let minor: u32 = captures[2].parse().unwrap_or(0);
         return major as f64 + (minor as f64 / 100.0);
     }
-    
+
     // Fallback: try to extract any number from the version string
-    if let Some(captures) = regex::Regex::new(r"(\d+)")
-        .unwrap()
-        .captures(version)
-    {
+    if let Some(captures) = regex::Regex::new(r"(\d+)").unwrap().captures(version) {
         return captures[1].parse::<f64>().unwrap_or(0.0);
     }
-    
+
     0.0
 }
 
@@ -765,7 +781,15 @@ async fn install_runner(runner_type: &str, version: &str) -> Result<()> {
             println!("Installing Proton-GE {version}...");
             let proton_manager = ProtonManager::new(runners_path);
 
-            let download_path = proton_manager.download_runner("proton-ge", version).await?;
+            // Extract the actual version number from the full version string
+            // e.g., "GE-Proton10-10" -> "10-10"
+            let version_number = if version.starts_with("GE-Proton") {
+                version.strip_prefix("GE-Proton").unwrap_or(version)
+            } else {
+                version
+            };
+
+            let download_path = proton_manager.download_runner("proton-ge", version_number).await?;
             proton_manager
                 .install_runner(&download_path, Path::new(""))
                 .await?;
@@ -790,6 +814,9 @@ async fn install_runner(runner_type: &str, version: &str) -> Result<()> {
             ));
         }
     }
+
+    // Refresh cache after installation
+    refresh_runners().await?;
 
     Ok(())
 }
