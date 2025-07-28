@@ -1,2 +1,3 @@
 - [ ] Fix mangohud on wayland
 - [ ] If specified proton version not found, download it after asking user for permission
+- [ ] change the runner add logic so that I need to mention GE-Proton10-10 instead of just 10-10, etc.

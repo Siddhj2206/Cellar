@@ -28,8 +28,10 @@ async fn main() -> Result<()> {
             exe,
             installer,
             interactive,
+            proton,
+            prefix,
         } => {
-            cli::commands::add_game(name, exe, installer, interactive)?;
+            cli::commands::add_game(name, exe, installer, interactive, proton, prefix).await?;
         }
         Commands::Launch { name } => {
             cli::commands::launch_game(name).await?;

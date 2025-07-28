@@ -11,7 +11,7 @@ use crate::config::validation::validate_game_config;
 use crate::runners::dxvk::DxvkManager;
 use crate::runners::proton::ProtonManager;
 use crate::runners::RunnerManager;
-use crate::utils::fs::CellarDirectories;
+use crate::utils::fs::{sanitize_filename, CellarDirectories};
 
 #[derive(Subcommand)]
 pub enum Commands {
@@ -28,6 +28,12 @@ pub enum Commands {
         /// Interactive setup
         #[arg(short, long)]
         interactive: bool,
+        /// Proton version to use for the game
+        #[arg(long)]
+        proton: Option<String>,
+        /// Prefix name to use (defaults to game name)
+        #[arg(long)]
+        prefix: Option<String>,
     },
     /// Launch a game
     Launch {
@@ -123,11 +129,13 @@ pub enum PrefixCommands {
     },
 }
 
-pub fn add_game(
+pub async fn add_game(
     name: String,
     exe: Option<String>,
     installer: Option<String>,
     interactive: bool,
+    proton: Option<String>,
+    prefix: Option<String>,
 ) -> Result<()> {
     let dirs = CellarDirectories::new()?;
     dirs.ensure_all_exist()?;
@@ -156,7 +164,9 @@ pub fn add_game(
         return Err(anyhow!("Game name cannot be empty"));
     }
 
-    let config = create_basic_game_config(&name, exe_path, &dirs)?;
+    let config =
+        create_basic_game_config(&name, exe_path, &dirs, proton.as_deref(), prefix.as_deref())
+            .await?;
     save_game_config(&dirs, &name, &config)?;
 
     println!("Successfully added game: {name}");
@@ -290,19 +300,37 @@ pub fn show_status(name: Option<String>) -> Result<()> {
     Ok(())
 }
 
-fn create_basic_game_config(
+async fn create_basic_game_config(
     name: &str,
     exe_path: PathBuf,
     dirs: &CellarDirectories,
+    proton_version: Option<&str>,
+    prefix_name: Option<&str>,
 ) -> Result<GameConfig> {
-    let wine_prefix = dirs.get_game_prefix_path(name);
+    // Determine prefix name: use provided or default to game name
+    let prefix_name = match prefix_name {
+        Some(provided_prefix) => provided_prefix.to_string(),
+        None => sanitize_filename(name), // Only sanitize when using game name as prefix
+    };
+    let wine_prefix = dirs.get_prefixes_path().join(&prefix_name);
+
+    // Check if prefix exists, if not create it
+    if !wine_prefix.exists() {
+        println!("Creating new prefix: {}", prefix_name);
+        create_prefix(&prefix_name, proton_version).await?;
+    } else {
+        println!("Using existing prefix: {}", prefix_name);
+    }
+
+    // Use provided proton version or default
+    let proton_version = proton_version.unwrap_or("GE-Proton8-32");
 
     let config = GameConfig {
         game: GameInfo {
             name: name.to_string(),
             executable: exe_path,
             wine_prefix,
-            proton_version: "GE-Proton8-32".to_string(), // Default version
+            proton_version: proton_version.to_string(),
             dxvk_version: None,
             status: "configured".to_string(),
             template: None,
@@ -626,7 +654,11 @@ pub async fn handle_prefix_command(command: PrefixCommands) -> Result<()> {
         PrefixCommands::Create { name, proton } => create_prefix(&name, proton.as_deref()).await,
         PrefixCommands::List => list_prefixes().await,
         PrefixCommands::Remove { name } => remove_prefix(&name).await,
-        PrefixCommands::Run { prefix, exe, proton } => run_in_prefix(&prefix, &exe, proton.as_deref()).await,
+        PrefixCommands::Run {
+            prefix,
+            exe,
+            proton,
+        } => run_in_prefix(&prefix, &exe, proton.as_deref()).await,
     }
 }
 
@@ -676,15 +708,51 @@ async fn create_prefix(name: &str, proton_version: Option<&str>) -> Result<()> {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(anyhow!("Failed to create Proton prefix: {}", stderr));
+
+            // Check if prefix was actually created despite non-zero exit code
+            let system32_path = prefix_path.join("drive_c/windows/system32");
+            let version_file = prefix_path.join("version");
+
+            if system32_path.exists() && version_file.exists() {
+                // Prefix was created successfully despite umu-run's exit code
+                // This is common with umu-run's verbose output
+                println!("Prefix created successfully.");
+            } else {
+                // Filter out common umu-run informational messages
+                let critical_errors: Vec<&str> = stderr
+                    .lines()
+                    .filter(|line| {
+                        let line_lower = line.to_lowercase();
+                        line_lower.contains("error")
+                            && !line.contains("INFO:")
+                            && !line.contains("WARN:")
+                            && !line.contains("Proton:")
+                            && !line.contains("ProtonFixes")
+                            && !line.contains("fsync:")
+                            && !line.trim().is_empty()
+                    })
+                    .collect();
+
+                if !critical_errors.is_empty() {
+                    return Err(anyhow!(
+                        "Failed to create Proton prefix: {}",
+                        critical_errors.join("\n")
+                    ));
+                }
+
+                // If no critical errors but prefix wasn't created, show full stderr
+                return Err(anyhow!("Failed to create Proton prefix: {}", stderr));
+            }
         }
 
         // Verify the prefix was created successfully
         let system32_path = prefix_path.join("drive_c/windows/system32");
         if !system32_path.exists() {
-            return Err(anyhow!("Prefix creation appeared to succeed but system32 directory not found"));
+            return Err(anyhow!(
+                "Prefix creation appeared to succeed but system32 directory not found"
+            ));
         }
-        
+
         // Verify the version file was created by UMU
         let version_file = prefix_path.join("version");
         if !version_file.exists() {
@@ -854,12 +922,15 @@ async fn run_in_prefix(prefix: &str, exe: &str, proton_version: Option<&str>) ->
                 if !version.is_empty() {
                     println!("Auto-detected Proton prefix (version: {version})");
                     println!("Using Proton for execution...");
-                    
+
                     let runners_path = dirs.get_runners_path();
                     let proton_manager = ProtonManager::new(runners_path);
                     let runners = proton_manager.discover_local_runners().await?;
-                    
-                    if let Some(proton_runner) = runners.iter().find(|r| r.version == version || r.name.contains(version)) {
+
+                    if let Some(proton_runner) = runners
+                        .iter()
+                        .find(|r| r.version == version || r.name.contains(version))
+                    {
                         let child = tokio::process::Command::new("umu-run")
                             .env("WINEARCH", "win64")
                             .env("WINEPREFIX", &prefix_path)
@@ -898,15 +969,19 @@ async fn run_in_prefix(prefix: &str, exe: &str, proton_version: Option<&str>) ->
                                 ));
                             }
                         }
-                        
+
                         println!("Execution completed.");
                         return Ok(());
                     } else {
-                        println!("⚠ Proton version '{version}' not found, falling back to regular Wine");
+                        println!(
+                            "⚠ Proton version '{version}' not found, falling back to regular Wine"
+                        );
                     }
                 } else {
                     println!("⚠ Version file exists but is empty or invalid.");
-                    println!("  Consider using: cellar prefix run {prefix} {exe} --proton <version>");
+                    println!(
+                        "  Consider using: cellar prefix run {prefix} {exe} --proton <version>"
+                    );
                 }
             }
         }

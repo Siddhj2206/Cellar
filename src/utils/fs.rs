@@ -78,9 +78,9 @@ impl CellarDirectories {
             .join(format!("{}.toml", sanitize_filename(game_name)))
     }
 
-    pub fn get_game_prefix_path(&self, game_name: &str) -> PathBuf {
-        self.prefixes_dir.join(sanitize_filename(game_name))
-    }
+    // pub fn get_game_prefix_path(&self, game_name: &str) -> PathBuf {
+    //     self.prefixes_dir.join(sanitize_filename(game_name))
+    // }
 
     #[allow(dead_code)]
     pub fn get_game_icon_path(&self, game_name: &str, extension: &str) -> PathBuf {
