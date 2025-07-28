@@ -32,7 +32,9 @@ impl GameLauncher {
         self.validate_launch_config(game_config)?;
 
         // Find the Proton installation
-        let proton_path = self.find_proton_installation(&game_config.game.proton_version).await?;
+        let proton_path = self
+            .find_proton_installation(&game_config.game.proton_version)
+            .await?;
         println!("  Proton Path: {}", proton_path.display());
 
         // Build the launch command
@@ -43,7 +45,7 @@ impl GameLauncher {
         // Execute the command
         self.execute_launch_command(&launch_command).await?;
 
-        println!("Game launch completed.");
+        println!("Game exited.");
         Ok(())
     }
 
@@ -106,11 +108,9 @@ impl GameLauncher {
     /// Execute the launch command with proper environment and error handling
     async fn execute_launch_command(&self, launch_command: &LaunchCommand) -> Result<()> {
         let args = launch_command.command.as_args();
-        
+
         // Check if the first argument looks like an environment variable assignment
-        let needs_shell = args.first()
-            .map(|arg| arg.contains('='))
-            .unwrap_or(false);
+        let needs_shell = args.first().map(|arg| arg.contains('=')).unwrap_or(false);
 
         if needs_shell {
             // Use shell execution for complex command lines with environment variables
@@ -180,12 +180,12 @@ impl GameLauncher {
         let interesting_env_vars: Vec<_> = environment
             .iter()
             .filter(|(key, _)| {
-                key.starts_with("WINE") || 
-                key.starts_with("PROTON") || 
-                key.starts_with("DXVK") || 
-                key.starts_with("MANGOHUD") ||
-                key.starts_with("GAMEID") ||
-                key.starts_with("HOST_LC_ALL")
+                key.starts_with("WINE")
+                    || key.starts_with("PROTON")
+                    || key.starts_with("DXVK")
+                    || key.starts_with("MANGOHUD")
+                    || key.starts_with("GAMEID")
+                    || key.starts_with("HOST_LC_ALL")
             })
             .collect();
 
@@ -201,7 +201,11 @@ impl GameLauncher {
     fn shell_quote_command(&self, args: &[String]) -> String {
         args.iter()
             .map(|arg| {
-                if arg.contains(' ') || arg.contains('"') || arg.contains('\'') || arg.contains('\\') {
+                if arg.contains(' ')
+                    || arg.contains('"')
+                    || arg.contains('\'')
+                    || arg.contains('\\')
+                {
                     // Escape any existing double quotes and wrap in double quotes
                     format!("\"{}\"", arg.replace('\"', "\\\""))
                 } else {
@@ -218,7 +222,7 @@ impl GameLauncher {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            
+
             // Filter out Wine debug noise but show critical errors
             let critical_errors: Vec<&str> = stderr
                 .lines()
@@ -251,7 +255,7 @@ impl GameLauncher {
     /// Launch a game by name (convenience method)
     pub async fn launch_game_by_name(&self, game_name: &str) -> Result<()> {
         let config_path = self.dirs.get_game_config_path(game_name);
-        
+
         if !config_path.exists() {
             return Err(anyhow!("Game '{}' not found", game_name));
         }
@@ -259,8 +263,8 @@ impl GameLauncher {
         let content = std::fs::read_to_string(&config_path)
             .map_err(|e| anyhow!("Failed to read game config: {}", e))?;
 
-        let config: GameConfig = toml::from_str(&content)
-            .map_err(|e| anyhow!("Failed to parse game config: {}", e))?;
+        let config: GameConfig =
+            toml::from_str(&content).map_err(|e| anyhow!("Failed to parse game config: {}", e))?;
 
         self.launch_game(&config).await
     }

@@ -41,17 +41,20 @@ impl RunnerCache {
         }
     }
 
+    #[cfg(test)]
     pub fn add_runner(&mut self, runner: Runner) {
         self.runners.push(runner);
         self.last_updated = chrono::Utc::now();
     }
 
+    #[cfg(test)]
     pub fn find_runner(&self, name: &str, version: Option<&str>) -> Option<&Runner> {
         self.runners
             .iter()
             .find(|r| r.name == name && (version.is_none() || version == Some(&r.version)))
     }
 
+    #[cfg(test)]
     pub fn get_runners_by_type(&self, runner_type: RunnerType) -> Vec<&Runner> {
         self.runners
             .iter()

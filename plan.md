@@ -616,31 +616,29 @@ cellar validate --all
    - Auto-detection of Proton prefixes with marker files
    - Proper Proton execution using `umu-run` with correct environment variables
 
-### 🚧 Phase 3: Launch System (IN PROGRESS)
-7. **umu-launcher Integration** - ⚠️ PARTIAL
-   - ✅ Proton prefix execution with proper environment variables
-   - ✅ Command construction for prefix-based execution
-   - ❌ Steam-style launch command processing (`%command%` placeholder)
-   - ❌ Full game launching system
+### ✅ Phase 3: Launch System (COMPLETED)
+7. **umu-launcher Integration** - ✅ DONE
+   - Proton prefix execution with proper environment variables
+   - Command construction for prefix-based execution
+   - Steam-style launch command processing (`%command%` placeholder)
+   - Full game launching system with `cellar launch` command
+   - GameScope integration for display scaling and window management
+   - MangoHUD integration for performance monitoring
 
-8. **Advanced Configuration** - ❌ TODO
-   - Wine option configuration (esync, fsync, etc.)
-   - Environment variable management
-   - Launch argument processing
-
-### ❌ Phase 4: Installation and Desktop Features (TODO)
-9. **Manual Installation Workflow** - ❌ TODO
-10. **Desktop Integration** - ❌ TODO
-
-### ❌ Phase 5-9: Enhanced Features (TODO)
-All remaining phases are planned but not yet implemented.
+8. **Advanced Configuration** - ✅ DONE
+   - Wine option configuration (esync, fsync, dxvk, etc.)
+   - Environment variable management with proper Wine/Proton variables
+   - Launch argument processing and Steam-style launch options
+   - DXVK configuration with HUD and async settings
+   - Complex command line parsing with quote handling
 
 ## Current Working Features
 
 ### ✅ Implemented Commands
 ```bash
-# Game Management (Basic)
+# Game Management (Full)
 cellar add <game-name> --exe <path>       # Add existing game
+cellar launch <game-name>                 # Launch configured game
 cellar list                               # List all games
 cellar remove <game-name>                 # Remove game
 cellar info <game-name>                   # Show game info
@@ -657,25 +655,35 @@ cellar runners remove dxvk <version>     # Remove DXVK
 cellar runners install-dxvk <version> <prefix> # Install DXVK to prefix
 
 # Prefix Management (Full)
-cellar prefix create <name> --proton <version> # Create Proton prefix
-cellar prefix create <name>               # Create basic Wine prefix
+cellar prefix create <n> --proton <version> # Create Proton prefix
+cellar prefix create <n>               # Create basic Wine prefix
 cellar prefix list                        # List all prefixes
-cellar prefix remove <name>               # Remove prefix
+cellar prefix remove <n>               # Remove prefix
 cellar prefix run <prefix> <exe> --proton <version> # Run with explicit Proton
 cellar prefix run <prefix> <exe>          # Run with auto-detection
 ```
 
 ### 🔧 Technical Implementation Details
 
+**Game Launching:**
+- Full Steam-style launch command processing with `%command%` placeholder
+- Complex command line parsing with proper quote handling
+- Environment variable management for Wine/Proton/DXVK/MangoHUD
+- GameScope integration with resolution, upscaling, and display options
+- Comprehensive error filtering and output handling
+
 **Prefix Creation (Lutris-Compatible):**
 - Uses `umu-run createprefix` for Proton prefixes
 - Proper cache directory setup for Wine Mono/Gecko
-- Creates `proton_version.txt` marker for auto-detection
+- Creates `version` marker file for auto-detection
 
 **Proton Execution (Lutris-Compatible):**
 - Uses `umu-run` with `PROTON_VERB=waitforexitandrun`
 - Proper environment variables: `WINE_LARGE_ADDRESS_AWARE=1`, `GAMEID=umu-default`
 - Auto-detection of Proton prefixes
+- Steam-style launch command processing with `%command%` placeholder
+- GameScope and MangoHUD integration
+- Advanced Wine configuration (esync, fsync, dxvk, etc.)
 
 **Runner Management:**
 - Downloads from GitHub releases (Proton-GE, DXVK)
