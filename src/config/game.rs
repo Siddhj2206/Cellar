@@ -74,16 +74,16 @@ pub struct GamescopeConfig {
     pub width: u32,
     #[serde(default = "default_height")]
     pub height: u32,
+    #[serde(default = "default_output_width")]
+    pub output_width: u32,
+    #[serde(default = "default_output_height")]
+    pub output_height: u32,
     #[serde(default = "default_refresh_rate")]
     pub refresh_rate: u32,
     #[serde(default = "default_upscaling")]
     pub upscaling: String,
     #[serde(default = "default_true")]
     pub fullscreen: bool,
-    #[serde(default)]
-    pub borderless: bool,
-    #[serde(default = "default_true")]
-    pub steam_integration: bool,
     #[serde(default)]
     pub force_grab_cursor: bool,
     #[serde(default)]
@@ -178,6 +178,14 @@ fn default_upscaling() -> String {
     "fsr".to_string()
 }
 
+fn default_output_width() -> u32 {
+    1920
+}
+
+fn default_output_height() -> u32 {
+    1080
+}
+
 fn default_categories() -> Vec<String> {
     vec!["Game".to_string()]
 }
@@ -209,11 +217,11 @@ impl Default for GamescopeConfig {
             enabled: false,
             width: 1920,
             height: 1080,
+            output_width: 1920,
+            output_height: 1080,
             refresh_rate: 60,
             upscaling: "fsr".to_string(),
             fullscreen: true,
-            borderless: false,
-            steam_integration: true,
             force_grab_cursor: false,
             expose_wayland: false,
             hdr: false,
@@ -226,7 +234,7 @@ impl Default for GamescopeConfig {
 impl Default for MangohudConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: false,
             fps: true,
             gpu_stats: true,
             cpu_stats: true,

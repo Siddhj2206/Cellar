@@ -735,28 +735,28 @@ cellar prefix run <prefix> <exe>          # Run with auto-detection
    - Environment variable management
    - Launch argument processing
 
+### Phase 5: Enhanced Features
+9. **Gamescope Integration**
+    - Gamescope command construction
+    - Resolution and scaling configuration
+    - Display option management
+
+10. **MangoHUD Integration**
+    - MangoHUD configuration management
+    - Performance overlay settings
+    - Custom MangoHUD config support
+
 ### Phase 4: Installation and Desktop Features
-9. **Manual Installation Workflow**
+11. **Manual Installation Workflow**
    - Implement `cellar install` to run installers within a prefix.
    - Implement desktop shortcut and symlink creation.
    - Installer launching and monitoring
    - Post-installation executable detection
 
-10. **Desktop Integration**
+12. **Desktop Integration**
     - .desktop file generation
     - Icon extraction from executables
     - Local symlink management to ./local/share/applications
-
-### Phase 5: Enhanced Features
-11. **Gamescope Integration**
-    - Gamescope command construction
-    - Resolution and scaling configuration
-    - Display option management
-
-12. **MangoHUD Integration**
-    - MangoHUD configuration management
-    - Performance overlay settings
-    - Custom MangoHUD config support
 
 13. **Interactive Setup**
     - User-friendly setup wizards

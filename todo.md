@@ -1,0 +1,2 @@
+- [ ] Fix mangohud on wayland
+- [ ] If specified proton version not found, download it after asking user for permission

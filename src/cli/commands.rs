@@ -245,8 +245,12 @@ pub fn show_game_info(name: String) -> Result<()> {
     if config.gamescope.enabled {
         println!("\nGamescope Configuration:");
         println!(
-            "  Resolution: {}x{}",
+            "  Game Resolution: {}x{}",
             config.gamescope.width, config.gamescope.height
+        );
+        println!(
+            "  Output Resolution: {}x{}",
+            config.gamescope.output_width, config.gamescope.output_height
         );
         println!("  Refresh Rate: {}Hz", config.gamescope.refresh_rate);
         println!("  Upscaling: {}", config.gamescope.upscaling);
