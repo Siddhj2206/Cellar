@@ -21,7 +21,7 @@ mod tests {
             gamescope: GamescopeConfig::default(),
             mangohud: MangohudConfig::default(),
             desktop: DesktopConfig::default(),
-            dependencies: DependenciesConfig::default(),
+
             installation: None,
         };
 
@@ -29,7 +29,7 @@ mod tests {
         assert_eq!(config.game.proton_version, "GE-Proton8-32");
         assert_eq!(config.game.status, "configured");
         assert!(config.wine_config.esync);
-        assert!(config.mangohud.enabled);
+        assert!(!config.mangohud.enabled);
         assert!(!config.gamescope.enabled);
     }
 
@@ -52,7 +52,7 @@ mod tests {
             gamescope: GamescopeConfig::default(),
             mangohud: MangohudConfig::default(),
             desktop: DesktopConfig::default(),
-            dependencies: DependenciesConfig::default(),
+
             installation: None,
         };
 

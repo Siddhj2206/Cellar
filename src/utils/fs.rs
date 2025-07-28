@@ -11,7 +11,6 @@ pub struct CellarDirectories {
     pub shortcuts_dir: PathBuf,
     pub templates_dir: PathBuf,
     pub presets_dir: PathBuf,
-    pub deps_dir: PathBuf,
     pub applications_dir: PathBuf,
     pub cache_dir: PathBuf,
 }
@@ -33,7 +32,6 @@ impl CellarDirectories {
             shortcuts_dir: base_dir.join("shortcuts"),
             templates_dir: base_dir.join("templates"),
             presets_dir: base_dir.join("presets"),
-            deps_dir: base_dir.join("deps"),
             base_dir,
             applications_dir,
             cache_dir,
@@ -51,16 +49,12 @@ impl CellarDirectories {
         self.ensure_dir_exists(&self.shortcuts_dir)?;
         self.ensure_dir_exists(&self.templates_dir)?;
         self.ensure_dir_exists(&self.presets_dir)?;
-        self.ensure_dir_exists(&self.deps_dir)?;
         self.ensure_dir_exists(&self.applications_dir)?;
         self.ensure_dir_exists(&self.cache_dir)?;
 
         // Create subdirectories
         self.ensure_dir_exists(&self.runners_dir.join("proton"))?;
         self.ensure_dir_exists(&self.runners_dir.join("dxvk"))?;
-        self.ensure_dir_exists(&self.deps_dir.join("vcredist"))?;
-        self.ensure_dir_exists(&self.deps_dir.join("dotnet"))?;
-        self.ensure_dir_exists(&self.deps_dir.join("directx"))?;
 
         Ok(())
     }

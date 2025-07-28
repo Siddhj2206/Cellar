@@ -45,14 +45,10 @@ Cellar provides a Steam-like experience for managing Windows games on Linux thro
 │   ├── fps-game.toml
 │   ├── strategy-game.toml
 │   └── rpg-game.toml
-├── presets/            # Wine configuration presets
-│   ├── gaming.toml
-│   ├── compatibility.toml
-│   └── performance.toml
-└── deps/               # Dependency installers cache
-    ├── vcredist/
-    ├── dotnet/
-    └── directx/
+└── presets/            # Wine configuration presets
+    ├── gaming.toml
+    ├── compatibility.toml
+    └── performance.toml
 
 ./local/share/applications/  # Symlinked .desktop files
 ├── cellar-game1.desktop -> ../cellar/shortcuts/game1.desktop
@@ -72,9 +68,8 @@ Cellar provides a Steam-like experience for managing Windows games on Linux thro
 9. **Temporary Execution** - Run executables in prefixes without full setup
 10. **Template System** - Pre-configured game type templates
 11. **Preset System** - Wine configuration presets for different scenarios
-12. **Dependency Management** - Automatic installation of Windows dependencies
+12. **System Diagnostics** - Health checking and configuration validation
 13. **MangoHUD Integration** - Performance monitoring and overlay configuration
-14. **System Diagnostics** - Health checking and configuration validation
 
 ## Configuration Format
 
@@ -139,11 +134,6 @@ categories = ["Game"]
 keywords = ["game", "windows"]
 comment = "Windows game via Cellar"
 prefix_name = true                 # Prefix with "cellar-" to avoid conflicts
-
-[dependencies]
-vcredist2019 = true
-dotnet48 = false
-directx = true
 
 [installation]
 # Present only if game was installed via cellar
@@ -300,17 +290,6 @@ cellar preset apply gaming <game-name>    # Apply preset to game
 cellar config <game-name> --preset gaming
 ```
 
-### Dependency Management
-```bash
-# Dependency management
-cellar deps list                          # List available dependencies
-cellar deps install vcredist2019          # Install dependency globally
-cellar deps install dotnet48 <game-name>  # Install for specific game
-cellar deps check <game-name>             # Check game dependencies
-cellar deps update                        # Update dependency cache
-cellar deps remove vcredist2019           # Remove dependency
-```
-
 ### MangoHUD Integration
 ```bash
 # MangoHUD management
@@ -381,11 +360,6 @@ Desktop Integration:
 > [x] Create application shortcut
   [x] Install to local applications menu
 
-Dependencies:
-> [x] Visual C++ Redistributable 2019
-  [ ] .NET Framework 4.8
-  [x] DirectX End-User Runtime
-
 Launch options (Steam-style):
 [PROTON_ENABLE_WAYLAND=1 gamemoderun %command%]
 
@@ -430,8 +404,6 @@ Found executables:
 
 Game "My Game" configured successfully!
 Desktop shortcut created and linked to local applications.
-Installing dependencies: Visual C++ Redistributable 2019, DirectX...
-Dependencies installed successfully!
 ```
 
 #### Gamescope Configuration (if enabled)
@@ -481,10 +453,6 @@ enabled = true
 fps = true
 gpu_stats = true
 frame_timing = true
-
-[dependencies]
-vcredist2019 = true
-directx = true
 ```
 
 ### Wine Configuration Presets
@@ -549,16 +517,6 @@ cellar add "Old Game" --preset compatibility
 cellar preset apply gaming "Cyberpunk 2077"
 ```
 
-### Dependency Management
-```bash
-# Install dependencies for new game
-cellar add "My Game" --deps vcredist2019,directx
-
-# Check and install missing dependencies
-cellar deps check "Cyberpunk 2077"
-cellar deps install dotnet48 "Cyberpunk 2077"
-```
-
 ### MangoHUD Integration
 ```bash
 # Enable MangoHUD with default settings
@@ -584,224 +542,373 @@ cellar validate --all
 
 ### ✅ Phase 1: Core Infrastructure (COMPLETED)
 1. **Project Setup** - ✅ DONE
-   - Cargo project with required dependencies
-   - CLI argument parsing with `clap`
-   - Basic project structure
+   - Cargo project with required dependencies (clap, serde, toml, anyhow, tokio, reqwest, etc.)
+   - CLI argument parsing with `clap` derive macros
+   - Modular project structure with separate modules for CLI, config, launch, runners, utils
 
 2. **Configuration System** - ✅ DONE
-   - TOML serialization/deserialization
-   - Configuration validation
-   - Directory structure management
+   - TOML serialization/deserialization with comprehensive GameConfig structure
+   - Configuration validation with dedicated validation module
+   - Directory structure management through CellarDirectories utility
+   - Support for all planned config sections (game, launch, wine_config, dxvk, gamescope, mangohud, desktop)
 
 3. **Basic Game Management** - ✅ DONE
-   - Game creation and listing
-   - Configuration file management
-   - Simple game launching framework
+   - Game creation and listing with proper sanitized filenames
+   - Configuration file management in configs/ directory
+   - Game status tracking (configured, installing, installed, incomplete)
+   - Game removal and info display commands
 
 ### ✅ Phase 2: Runner Management (COMPLETED)
 4. **Runner Discovery and Management** - ✅ DONE
-   - Runner discovery for local Proton and DXVK installations
-   - Caching system for discovered runners
-   - `cellar runners list` and `cellar runners refresh` commands
-   - `cellar runners install` for downloading and extracting runners
-   - `cellar runners remove` for uninstalling runners
+   - Async runner discovery for local Proton and DXVK installations
+   - RunnerManager trait with concrete ProtonManager and DxvkManager implementations
+   - `cellar runners list`, `refresh`, `available`, `install`, `remove` commands
+   - GitHub API integration for downloading Proton-GE and DXVK releases
+   - Local installation with tar/zip extraction support
 
 5. **DXVK Integration** - ✅ DONE
    - DXVK version downloading and management
    - `cellar runners install-dxvk` for installing DXVK into prefixes
+   - DXVK configuration options in game configs
 
 6. **Wine Prefix Management** - ✅ DONE
-   - `cellar prefix create` with proper Lutris-style Proton workflow using `umu-run createprefix`
-   - `cellar prefix remove`, `list`, and `run` commands
-   - Auto-detection of Proton prefixes with marker files
-   - Proper Proton execution using `umu-run` with correct environment variables
+   - `cellar prefix create` with Proton version support
+   - `cellar prefix remove`, `list`, `run` commands
+   - Prefix creation workflow with environment variable setup
+   - Proton version marker files for auto-detection
 
 ### ✅ Phase 3: Launch System (COMPLETED)
 7. **umu-launcher Integration** - ✅ DONE
-   - Proton prefix execution with proper environment variables
-   - Command construction for prefix-based execution
-   - Steam-style launch command processing (`%command%` placeholder)
+   - Launch executor with proper environment variable management
+   - Command construction for Proton/Wine execution
+   - Steam-style launch command processing with `%command%` placeholder replacement
    - Full game launching system with `cellar launch` command
-   - GameScope integration for display scaling and window management
-   - MangoHUD integration for performance monitoring
+   - Error handling and output filtering
 
 8. **Advanced Configuration** - ✅ DONE
-   - Wine option configuration (esync, fsync, dxvk, etc.)
-   - Environment variable management with proper Wine/Proton variables
-   - Launch argument processing and Steam-style launch options
-   - DXVK configuration with HUD and async settings
-   - Complex command line parsing with quote handling
+   - Wine option configuration (esync, fsync, dxvk, dxvk_async, large_address_aware)
+   - Environment variable management with Wine/Proton variables
+   - Launch argument processing and game-specific arguments
+   - DXVK configuration with HUD settings
+   - GameScope and MangoHUD configuration structures
+
+### ⚠️ Phase 4: Installation and Desktop Features (PARTIALLY IMPLEMENTED)
+9. **Manual Installation Workflow** - 🔄 IN PROGRESS
+   - Basic installer support planned but not fully implemented
+   - Need to implement `cellar install` to run installers within a prefix
+   - Need desktop shortcut and symlink creation
+   - Need post-installation executable detection and scanning
+
+10. **Desktop Integration** - ❌ NOT STARTED
+    - .desktop file generation not implemented
+    - Icon extraction from executables not implemented
+    - Local symlink management to ./local/share/applications not implemented
+
+11. **Interactive Setup** - ❌ NOT STARTED
+    - User-friendly setup wizards not implemented
+    - Configuration validation and preview not implemented
+    - File browsing and path selection not implemented
+
+### ❌ Phase 5: Enhanced Features (NOT STARTED)
+12. **Gamescope Integration** - 🔄 PARTIAL
+    - Gamescope configuration structure exists in config
+    - Command construction and execution not implemented
+    - Resolution and scaling configuration not implemented
+    - Display option management not implemented
+
+13. **MangoHUD Integration** - 🔄 PARTIAL
+    - MangoHUD configuration structure exists in config
+    - Configuration management not implemented
+    - Performance overlay settings not implemented
+    - Custom MangoHUD config support not implemented
+
+### ❌ Phase 6: Template and Preset Systems (NOT STARTED)
+14. **Template System** - ❌ NOT STARTED
+    - Pre-configured game type templates not implemented
+    - Template creation and editing not implemented
+    - Template application to games not implemented
+
+15. **Preset System** - ❌ NOT STARTED
+    - Wine configuration presets not implemented
+    - Preset creation and management not implemented
+    - Easy preset application not implemented
+
+### ❌ Phase 7: Utilities and Diagnostics (NOT STARTED)
+16. **Temporary Execution** - ❌ NOT STARTED
+    - Prefix-based temporary execution not implemented
+    - Utility command shortcuts (winetricks, winecfg, etc.) not implemented
+    - Temporary prefix management not implemented
+
+17. **System Diagnostics** - ❌ NOT STARTED
+    - Comprehensive system health checking not implemented
+    - Configuration validation and repair not implemented
+    - Dependency verification not implemented
+
+18. **Dependency Management** - ❌ NOT STARTED
+    - Windows dependency detection and installation not implemented
+    - Visual C++ Redistributables, .NET Framework, DirectX support not implemented
+    - Per-game dependency tracking not implemented
+
+### ❌ Phase 8: Polish and Testing (PARTIALLY IMPLEMENTED)
+19. **Error Handling and Validation** - 🔄 PARTIAL
+    - Basic error handling with anyhow implemented
+    - Configuration validation partially implemented
+    - Need comprehensive error messages and dependency checking
+
+20. **Testing and Documentation** - 🔄 PARTIAL
+    - Test modules exist but may not be comprehensive
+    - User documentation exists in plan.md
+    - Need more example configurations and integration tests
 
 ## Current Working Features
 
-### ✅ Implemented Commands
+### ✅ Fully Implemented Commands
 ```bash
-# Game Management (Full)
-cellar add <game-name> --exe <path>       # Add existing game
-cellar launch <game-name>                 # Launch configured game
-cellar list                               # List all games
-cellar remove <game-name>                 # Remove game
-cellar info <game-name>                   # Show game info
-cellar status [game-name]                 # Show game status
+# Game Management (Full Implementation)
+cellar add <game-name> --exe <path>       # Add existing game with executable
+cellar add <game-name> --proton <version> # Add game with specific Proton version
+cellar add <game-name> --prefix <name>    # Add game with custom prefix name
+cellar launch <game-name>                 # Launch configured game with full environment setup
+cellar list                               # List all games with status information
+cellar remove <game-name>                 # Remove game configuration
+cellar info <game-name>                   # Show detailed game configuration
+cellar status [game-name]                 # Show game status (all games or specific game)
 
-# Runner Management (Full)
-cellar runners list                       # Show installed runners
-cellar runners refresh                    # Re-scan runners
-cellar runners available                  # Show downloadable versions
-cellar runners install proton <version>  # Install Proton-GE
-cellar runners install dxvk <version>    # Install DXVK
-cellar runners remove proton <version>   # Remove Proton-GE
-cellar runners remove dxvk <version>     # Remove DXVK
-cellar runners install-dxvk <version> <prefix> # Install DXVK to prefix
+# Runner Management (Full Implementation)
+cellar runners list                       # Show installed Proton and DXVK runners
+cellar runners refresh                    # Re-scan for locally installed runners
+cellar runners available                  # Show available versions for download
+cellar runners install proton <version>  # Download and install Proton-GE version
+cellar runners install dxvk <version>    # Download and install DXVK version
+cellar runners remove proton <version>   # Remove installed Proton-GE version
+cellar runners remove dxvk <version>     # Remove installed DXVK version
+cellar runners install-dxvk <version> <prefix> # Install DXVK into specific prefix
 
-# Prefix Management (Full)
-cellar prefix create <n> --proton <version> # Create Proton prefix
-cellar prefix create <n>               # Create basic Wine prefix
-cellar prefix list                        # List all prefixes
-cellar prefix remove <n>               # Remove prefix
-cellar prefix run <prefix> <exe> --proton <version> # Run with explicit Proton
-cellar prefix run <prefix> <exe>          # Run with auto-detection
+# Prefix Management (Full Implementation)
+cellar prefix create <name> --proton <version> # Create Proton-enabled prefix
+cellar prefix create <name>               # Create basic Wine prefix
+cellar prefix list                        # List all managed prefixes
+cellar prefix remove <name>               # Remove prefix and all contents
+cellar prefix run <prefix> <exe> --proton <version> # Run executable with Proton
+cellar prefix run <prefix> <exe>          # Run executable (auto-detect Proton)
+```
+
+### 🔄 Partially Implemented Features
+```bash
+# Installation Workflow (Basic Structure Only)
+cellar add <game-name> --installer <path> # Planned but installer execution not implemented
+
+# Interactive Setup (Structure Only)
+cellar add <game-name> --interactive       # Flag exists but interactive prompts not implemented
+```
+
+### ❌ Not Yet Implemented Commands
+```bash
+# Installation and Setup Commands
+cellar installer <game-name> <installer>  # Run installer in existing game prefix
+cellar setup <game-name> --exe <path>     # Set executable after installation
+cellar scan <game-name>                   # Scan prefix for executables
+cellar finalize <game-name>               # Complete configuration after install
+
+# Configuration Management
+cellar config <game-name>                 # Show current config
+cellar config <game-name> edit            # Interactive config editor
+cellar config <game-name> <key>=<value>   # Quick config changes
+
+# Desktop Integration
+cellar shortcut create <game-name>        # Create desktop shortcut
+cellar shortcut remove <game-name>        # Remove shortcut
+cellar shortcut link <game-name>          # Create symlink to local applications
+cellar shortcut sync                      # Sync all shortcuts
+
+# Template and Preset System
+cellar template list/create/edit/apply    # Template management
+cellar preset list/create/edit/apply      # Preset management
+
+# Utilities and Diagnostics
+cellar exec <prefix> <executable>         # Temporary execution
+cellar winetricks/winecfg/regedit <prefix> # Utility shortcuts
+cellar clean/check/repair/fix             # Maintenance commands
+cellar doctor/validate                    # System diagnostics
+
+# Integration
+cellar mangohud enable/disable/config     # MangoHUD management
 ```
 
 ### 🔧 Technical Implementation Details
 
-**Game Launching:**
-- Full Steam-style launch command processing with `%command%` placeholder
-- Complex command line parsing with proper quote handling
-- Environment variable management for Wine/Proton/DXVK/MangoHUD
-- GameScope integration with resolution, upscaling, and display options
-- Comprehensive error filtering and output handling
+**Game Launching System:**
+- ✅ Full Steam-style launch command processing with `%command%` placeholder replacement
+- ✅ Environment variable management for Wine/Proton/DXVK/MangoHUD through LaunchExecutor
+- ✅ Game argument processing and launch option handling
+- ✅ Error filtering and output handling for clean user experience
+- ⚠️ GameScope integration configured but command construction needs implementation
+- ⚠️ MangoHUD integration configured but actual environment setup needs implementation
 
-**Prefix Creation (Lutris-Compatible):**
-- Uses `umu-run createprefix` for Proton prefixes
-- Proper cache directory setup for Wine Mono/Gecko
-- Creates `version` marker file for auto-detection
+**Configuration Management:**
+- ✅ Comprehensive TOML-based configuration with all planned sections
+- ✅ Game config validation with proper error handling
+- ✅ Sanitized filename generation for game configs
+- ✅ Directory structure management through CellarDirectories utility
+- ✅ Support for all wine options (esync, fsync, dxvk, dxvk_async, large_address_aware)
 
-**Proton Execution (Lutris-Compatible):**
-- Uses `umu-run` with `PROTON_VERB=waitforexitandrun`
-- Proper environment variables: `WINE_LARGE_ADDRESS_AWARE=1`, `GAMEID=umu-default`
-- Auto-detection of Proton prefixes
-- Steam-style launch command processing with `%command%` placeholder
-- GameScope and MangoHUD integration
-- Advanced Wine configuration (esync, fsync, dxvk, etc.)
+**Prefix Management:**
+- ✅ Proton prefix creation with proper environment variable setup
+- ✅ Wine prefix creation for non-Proton scenarios
+- ✅ Prefix version marker files for auto-detection
+- ✅ Prefix execution with both explicit and auto-detected Proton versions
+- ✅ Proper cleanup and removal of prefixes
 
 **Runner Management:**
-- Downloads from GitHub releases (Proton-GE, DXVK)
-- Local installation and caching
-- Integration with Steam's Proton installations
-- DXVK integration into Wine prefixes
+- ✅ Async GitHub API integration for downloading releases
+- ✅ Local installation with tar/zip extraction support
+- ✅ RunnerManager trait-based architecture for extensibility
+- ✅ Proton-GE and DXVK version management
+- ✅ Installation verification and caching
 
-## Implementation Plan
+**CLI Architecture:**
+- ✅ Clap-based command structure with proper subcommands
+- ✅ Async runtime with Tokio for efficient I/O operations
+- ✅ Comprehensive error handling with anyhow
+- ✅ Modular command handling with separate command implementations
 
-### Phase 1: Core Infrastructure
-1. **Project Setup**
-   - Initialize Cargo project with required dependencies
-   - Set up CLI argument parsing with `clap`
-   - Create basic project structure
+**File System Management:**
+- ✅ Directory structure creation and management
+- ✅ Proper file path handling across platforms
+- ✅ Configuration file management with atomic operations
+- ✅ Archive extraction with proper error handling
 
-2. **Configuration System**
-   - Implement TOML serialization/deserialization
-   - Create configuration validation
-   - Set up directory structure management
+### 📋 Current Known Issues (from todo.md)
+- [ ] Replace 'MANGOHUD=1' with 'mangohud' command
+- [ ] When adding a new game, if no proton version provided, use the latest available in cache
+- [ ] If specified proton version not found, download it after asking user for permission
+- [ ] Change runner add logic to require full version names (e.g., 'GE-Proton10-10' instead of '10-10')
+- [ ] Ask user if they want to delete the prefix when removing a game
+- [ ] Improve help messages especially when adding a game or creating a prefix
 
-3. **Basic Game Management**
-   - Implement game creation and listing
-   - Basic configuration file management
-   - Simple game launching without runners
+### 🎯 Immediate Next Steps for Full Functionality
 
-### Phase 2: Runner Management
-4. **Runner Discovery and Management**
-   - Implement runner discovery for local Wine and Proton installations.
-   - Implement caching for discovered runners.
-   - Build `cellar runners list` and `cellar runners refresh` commands.
-   - Implement `cellar runners install` to download and extract runners.
+**High Priority (Essential Features Missing):**
+1. **Interactive Setup Implementation** - Critical for user experience
+2. **Desktop Integration** - .desktop file generation and symlink management
+3. **Manual Installation Workflow** - Complete installer execution and post-install setup
+4. **GameScope Command Construction** - Implement actual gamescope execution
+5. **MangoHUD Environment Setup** - Complete MangoHUD integration
 
-5. **DXVK Integration**
-   - DXVK version downloading and management.
-   - Integration with Proton installations.
+**Medium Priority (Quality of Life):**
+1. **Template and Preset Systems** - For easier game configuration
+2. **Configuration Management Commands** - Interactive config editing
+3. **System Diagnostics** - Health checking and validation
+4. **Dependency Management** - Windows dependency installation
 
-6. **Wine Prefix Management**
-   - Implement `cellar prefix create`, including the Proton creation workflow using `umu`.
-   - Implement `cellar prefix remove`, `list`, and `run` commands.
+**Low Priority (Polish and Advanced Features):**
+1. **Temporary Execution Utilities** - winetricks, winecfg shortcuts
+2. **Advanced Error Recovery** - Repair and fix commands
+3. **Comprehensive Testing** - Integration and unit tests
+4. **Performance Optimizations** - Caching and efficiency improvements
 
-### Phase 3: Launch System
-7. **umu-launcher Integration**
-   - Command construction with local runners
-   - Environment variable management (including custom variables and DLL overrides)
-   - Steam-style launch command processing
+## Implementation Roadmap
 
-8. **Advanced Configuration**
-   - Wine option configuration (esync, fsync, etc.)
-   - Environment variable management
-   - Launch argument processing
+### 🚀 Phase 4: Essential Missing Features (HIGH PRIORITY)
+```bash
+# Focus: Complete core functionality for basic usability
+Target: 2-3 weeks
 
-### Phase 5: Enhanced Features
-9. **Gamescope Integration**
-    - Gamescope command construction
-    - Resolution and scaling configuration
-    - Display option management
+1. Interactive Setup Implementation
+   - Implement interactive prompts for game addition
+   - File browsing and path selection
+   - Configuration preview and confirmation
 
-10. **MangoHUD Integration**
-    - MangoHUD configuration management
-    - Performance overlay settings
-    - Custom MangoHUD config support
+2. Desktop Integration  
+   - .desktop file generation with proper categories and metadata
+   - Icon extraction from executables or default icons
+   - Symlink management to ~/.local/share/applications/
 
-### Phase 4: Installation and Desktop Features
-11. **Manual Installation Workflow**
-   - Implement `cellar install` to run installers within a prefix.
-   - Implement desktop shortcut and symlink creation.
-   - Installer launching and monitoring
-   - Post-installation executable detection
+3. Manual Installation Workflow
+   - Installer execution within prefixes
+   - Post-installation executable scanning and detection
+   - Installation progress monitoring and completion handling
 
-12. **Desktop Integration**
-    - .desktop file generation
-    - Icon extraction from executables
-    - Local symlink management to ./local/share/applications
+4. GameScope and MangoHUD Execution
+   - Complete gamescope command construction and execution
+   - MangoHUD environment variable setup and execution
+   - Integration testing with actual games
 
-13. **Interactive Setup**
-    - User-friendly setup wizards
-    - Configuration validation and preview
-    - File browsing and path selection
+5. Configuration Management
+   - Interactive config editing with prompts
+   - Quick config changes via command line (key=value syntax)
+   - Config validation and repair functionality
+```
 
-### Phase 6: Template and Preset Systems
-14. **Template System**
-    - Pre-configured game type templates (FPS, Strategy, RPG)
-    - Template creation and editing
-    - Template application to games
+### 🛠️ Phase 5: Quality of Life Features (MEDIUM PRIORITY)
+```bash
+# Focus: Improve user experience and workflow efficiency
+Target: 3-4 weeks
 
-15. **Preset System**
-    - Wine configuration presets (Gaming, Compatibility, Performance)
-    - Preset creation and management
-    - Easy preset application
+1. Template and Preset Systems
+   - Game type templates (FPS, Strategy, RPG, etc.)
+   - Wine configuration presets (Gaming, Compatibility, Performance)
+   - Template creation, editing, and application
 
-### Phase 7: Utilities and Diagnostics
-16. **Temporary Execution**
-    - Prefix-based temporary execution
-    - Utility command shortcuts (winetricks, winecfg, etc.)
-    - Temporary prefix management
+2. System Diagnostics and Maintenance
+   - Health checking for games, prefixes, and runners
+   - Configuration validation and automatic repair
+   - Cleanup utilities for temporary files and broken links
 
-17. **System Diagnostics**
-    - Comprehensive system health checking
-    - Configuration validation and repair
-    - Dependency verification
+3. Enhanced Installation Workflow
+   - Executable scanning and selection after installation
+   - Installation status tracking and recovery
+   - Better installer progress monitoring
 
-18. **Dependency Management**
-    - Windows dependency detection and installation
-    - Visual C++ Redistributables, .NET Framework, DirectX
-    - Per-game dependency tracking
+4. Improved CLI Experience
+   - Better help messages and examples
+   - Progress indicators for long-running operations
+   - More intuitive command organization
+```
 
-### Phase 8: Polish and Testing
-19. **Error Handling and Validation**
-    - Comprehensive error messages
-    - Configuration validation
-    - Dependency checking
+### 🎯 Phase 6: Advanced Features (LOW PRIORITY)
+```bash
+# Focus: Advanced functionality and polish
+Target: 4-6 weeks
 
-20. **Testing and Documentation**
-    - Unit and integration tests
-    - User documentation
-    - Example configurations
+1. Utility Command Shortcuts
+   - winetricks, winecfg, regedit shortcuts for prefixes
+   - Temporary execution environment
+   - Wine utility integration
 
-## Dependencies
+2. Advanced Diagnostics
+   - Comprehensive system health checking
+   - Performance monitoring and optimization suggestions
+   - Automated troubleshooting and problem resolution
+
+3. Polish and Optimization
+   - Comprehensive error handling and user feedback
+   - Performance optimizations and caching improvements
+   - Advanced logging and debugging capabilities
+```
+
+### 🧪 Phase 7: Testing and Documentation (ONGOING)
+```bash
+# Focus: Reliability and user documentation
+Target: Ongoing throughout development
+
+1. Comprehensive Testing
+   - Unit tests for all major components
+   - Integration tests with real games and scenarios
+   - Edge case testing and error condition handling
+
+2. User Documentation
+   - Complete user manual with examples
+   - Configuration guides and best practices
+   - Troubleshooting and FAQ documentation
+
+3. Code Quality
+   - Code review and refactoring
+   - Performance profiling and optimization
+   - Security review and hardening
+```
+
+## External Dependencies
 
 ### Required Crates
 ```toml
@@ -882,10 +989,6 @@ src/
 ├── install/               # Installation workflow
 │   ├── mod.rs
 │   └── installer.rs       # Manual installer support
-├── deps/                  # Dependency management
-│   ├── mod.rs
-│   ├── manager.rs         # Dependency installation
-│   └── registry.rs        # Available dependencies
 ├── diagnostics/           # System diagnostics
 │   ├── mod.rs
 │   ├── doctor.rs          # Health checking
@@ -909,7 +1012,6 @@ src/
    - Interactive setup and configuration editing
    - Temporary execution of utilities in prefixes
    - Template and preset system for easy game configuration
-   - Windows dependency management and installation
    - MangoHUD integration for performance monitoring
    - System diagnostics and configuration validation
 
@@ -926,19 +1028,17 @@ src/
    - Desktop integration with application menu shortcuts
    - Template-based setup for common game types
    - Preset-based wine configuration for different scenarios
-   - Automated dependency detection and installation
    - Clear status messages and progress indicators
    - Flexible configuration options
    - Reliable game launching with gamescope and MangoHUD support
 
 4. **Technical Requirements**
-   - Local runner management (no system dependencies)
+   - Local runner management
    - Portable project structure
    - Efficient symlink management for shortcuts
    - Support for both existing games and new installations
    - Temporary prefix execution for utilities
    - Template and preset management systems
-   - Dependency caching and management
    - System health monitoring and validation
 
 This plan provides a comprehensive roadmap for implementing all requested features while maintaining good software engineering practices and user experience. The redesigned CLI interface makes the tool more intuitive and supports both simple game addition and complex installation workflows, with advanced features like templates, presets, dependency management, and system diagnostics.

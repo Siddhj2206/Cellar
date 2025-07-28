@@ -25,7 +25,7 @@ mod tests {
             gamescope: GamescopeConfig::default(),
             mangohud: MangohudConfig::default(),
             desktop: DesktopConfig::default(),
-            dependencies: DependenciesConfig::default(),
+
             installation: None,
         }
     }

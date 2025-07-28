@@ -14,8 +14,7 @@ pub struct GameConfig {
     pub mangohud: MangohudConfig,
     #[serde(default)]
     pub desktop: DesktopConfig,
-    #[serde(default)]
-    pub dependencies: DependenciesConfig,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub installation: Option<InstallationInfo>,
 }
@@ -132,15 +131,6 @@ pub struct DesktopConfig {
     pub prefix_name: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct DependenciesConfig {
-    #[serde(default)]
-    pub vcredist2019: bool,
-    #[serde(default)]
-    pub dotnet48: bool,
-    #[serde(default)]
-    pub directx: bool,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstallationInfo {
