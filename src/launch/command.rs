@@ -34,9 +34,6 @@ impl CommandBuilder {
         // Apply DXVK environment variables
         env_vars.extend(self.build_dxvk_environment()?);
 
-        // Apply MangoHUD environment variables
-        env_vars.extend(self.build_mangohud_environment()?);
-
         // Process Steam-style launch options with %command% placeholder
         let final_command = self.process_launch_options(base_command, &env_vars)?;
 
@@ -141,25 +138,6 @@ impl CommandBuilder {
         Ok(env)
     }
 
-    /// Build MangoHUD-specific environment variables
-    fn build_mangohud_environment(&self) -> Result<HashMap<String, String>> {
-        let mut env = HashMap::new();
-
-        if self.config.mangohud.enabled {
-            env.insert("MANGOHUD".to_string(), "1".to_string());
-
-            // Custom MangoHUD config file if specified
-            if let Some(config_file) = &self.config.mangohud.config_file {
-                env.insert(
-                    "MANGOHUD_CONFIGFILE".to_string(),
-                    config_file.to_string_lossy().to_string(),
-                );
-            }
-        }
-
-        Ok(env)
-    }
-
     /// Process Steam-style launch options with %command% placeholder
     fn process_launch_options(
         &self,
@@ -169,8 +147,9 @@ impl CommandBuilder {
         let launch_options = &self.config.launch.launch_options;
 
         if launch_options.is_empty() {
-            // No launch options, return base command with gamescope if enabled
-            return Ok(self.wrap_with_gamescope(base_command)?);
+            // No launch options, wrap with mangohud first, then gamescope if enabled
+            let mangohud_wrapped = self.wrap_with_mangohud(base_command)?;
+            return Ok(self.wrap_with_gamescope(mangohud_wrapped)?);
         }
 
         // Parse launch options into tokens
@@ -199,8 +178,9 @@ impl CommandBuilder {
             final_command.extend(base_command);
         }
 
-        // Wrap with gamescope if enabled
-        self.wrap_with_gamescope(final_command)
+        // Wrap with mangohud first, then gamescope if enabled
+        let mangohud_wrapped = self.wrap_with_mangohud(final_command)?;
+        self.wrap_with_gamescope(mangohud_wrapped)
     }
 
     /// Parse launch options string into tokens, handling quotes and environment variables
@@ -239,6 +219,17 @@ impl CommandBuilder {
         }
 
         Ok(tokens)
+    }
+
+    /// Wrap command with mangohud if enabled (but not when gamescope is enabled)
+    fn wrap_with_mangohud(&self, command: Vec<String>) -> Result<Vec<String>> {
+        if !self.config.mangohud.enabled || self.config.gamescope.enabled {
+            return Ok(command);
+        }
+
+        let mut mangohud_cmd = vec!["mangohud".to_string()];
+        mangohud_cmd.extend(command);
+        Ok(mangohud_cmd)
     }
 
     /// Wrap command with gamescope if enabled
@@ -318,6 +309,11 @@ impl CommandBuilder {
 
         if gamescope_config.immediate_flips {
             gamescope_cmd.push("--immediate-flips".to_string());
+        }
+
+        // Add --mangoapp if mangohud is enabled
+        if self.config.mangohud.enabled {
+            gamescope_cmd.push("--mangoapp".to_string());
         }
 
         // Add separator and the actual command

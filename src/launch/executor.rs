@@ -183,7 +183,6 @@ impl GameLauncher {
                 key.starts_with("WINE")
                     || key.starts_with("PROTON")
                     || key.starts_with("DXVK")
-                    || key.starts_with("MANGOHUD")
                     || key.starts_with("GAMEID")
                     || key.starts_with("HOST_LC_ALL")
             })

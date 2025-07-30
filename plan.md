@@ -779,7 +779,7 @@ cellar mangohud enable/disable/config     # MangoHUD management
 - ✅ Archive extraction with proper error handling
 
 ### 📋 Current Known Issues (from todo.md)
-- [ ] Replace 'MANGOHUD=1' with 'mangohud' command
+- [x] Replace 'MANGOHUD=1' with 'mangohud' command
 - [ ] When adding a new game, if no proton version provided, use the latest available in cache
 - [ ] If specified proton version not found, download it after asking user for permission
 - [ ] Change runner add logic to require full version names (e.g., 'GE-Proton10-10' instead of '10-10')

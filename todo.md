@@ -1,6 +1,6 @@
 # To-Do
 
-- [ ] Replace 'MANGOHUD=1' with 'mangohud'
+- [x] Replace 'MANGOHUD=1' with 'mangohud'
 - [x] When adding a new game, if no proton version provided, use the latest available in cache
 - [x] If specified proton version not found, download it after asking user for permission
 - [x] Fix issue where directories that use "~/" instead of "/home/[user]/" don't work

@@ -97,18 +97,8 @@ pub struct GamescopeConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MangohudConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-    #[serde(default = "default_true")]
-    pub fps: bool,
-    #[serde(default = "default_true")]
-    pub gpu_stats: bool,
-    #[serde(default = "default_true")]
-    pub cpu_stats: bool,
     #[serde(default)]
-    pub frame_timing: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub config_file: Option<PathBuf>,
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -225,11 +215,6 @@ impl Default for MangohudConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            fps: true,
-            gpu_stats: true,
-            cpu_stats: true,
-            frame_timing: false,
-            config_file: None,
         }
     }
 }
