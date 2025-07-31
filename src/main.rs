@@ -37,7 +37,7 @@ async fn main() -> Result<()> {
             cli::commands::launch_game(name).await?;
         }
         Commands::List => {
-            cli::commands::list_games()?;
+            cli::commands::list_games(None)?;
         }
         Commands::Remove { name } => {
             cli::commands::remove_game(name)?;
@@ -46,7 +46,7 @@ async fn main() -> Result<()> {
             cli::commands::show_game_info(name)?;
         }
         Commands::Status { name } => {
-            cli::commands::show_status(name)?;
+            cli::commands::list_games(name)?;
         }
         Commands::Runners { command } => {
             cli::commands::handle_runners_command(command).await?;

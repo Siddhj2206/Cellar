@@ -12,7 +12,6 @@ mod tests {
                 wine_prefix: PathBuf::from("/path/to/prefix"),
                 proton_version: "GE-Proton8-32".to_string(),
                 dxvk_version: None,
-                status: "configured".to_string(),
                 template: None,
                 preset: None,
             },

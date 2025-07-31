@@ -27,8 +27,7 @@ pub struct GameInfo {
     pub proton_version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dxvk_version: Option<String>,
-    #[serde(default = "default_status")]
-    pub status: String,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub template: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -130,10 +129,6 @@ pub struct InstallationInfo {
 }
 
 // Default value functions
-fn default_status() -> String {
-    "configured".to_string()
-}
-
 fn default_true() -> bool {
     true
 }

@@ -36,16 +36,6 @@ pub fn validate_game_config(config: &GameConfig) -> Result<()> {
         return Err(anyhow!("Proton version cannot be empty"));
     }
 
-    // Validate status
-    let valid_statuses = ["configured", "installing", "installed", "incomplete"];
-    if !valid_statuses.contains(&config.game.status.as_str()) {
-        return Err(anyhow!(
-            "Invalid status '{}'. Must be one of: {}",
-            config.game.status,
-            valid_statuses.join(", ")
-        ));
-    }
-
     // Validate gamescope configuration
     if config.gamescope.enabled {
         validate_gamescope_config(&config.gamescope)?;

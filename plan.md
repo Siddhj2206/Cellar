@@ -592,8 +592,8 @@ cellar validate --all
    - DXVK configuration with HUD settings
    - GameScope and MangoHUD configuration structures
 
-### ⚠️ Phase 4: Installation and Desktop Features (PARTIALLY IMPLEMENTED)
-9. **Manual Installation Workflow** - 🔄 IN PROGRESS
+### Phase 4: Installation and Desktop Features
+9. **Manual Installation Workflow**
    - Basic installer support planned but not fully implemented
    - Need to implement `cellar install` to run installers within a prefix
    - Need desktop shortcut and symlink creation
@@ -667,7 +667,7 @@ cellar validate --all
 # Game Management (Full Implementation)
 cellar add <game-name> --exe <path>       # Add existing game with executable
 cellar add <game-name> --proton <version> # Add game with specific Proton version
-cellar add <game-name> --prefix <name>    # Add game with custom prefix name
+cellar add <game-name> --prefix <n>       # Add game with custom prefix name
 cellar launch <game-name>                 # Launch configured game with full environment setup
 cellar list                               # List all games with status information
 cellar remove <game-name>                 # Remove game configuration
@@ -695,21 +695,12 @@ cellar prefix run <prefix> <exe>          # Run executable (auto-detect Proton)
 
 ### 🔄 Partially Implemented Features
 ```bash
-# Installation Workflow (Basic Structure Only)
-cellar add <game-name> --installer <path> # Planned but installer execution not implemented
-
 # Interactive Setup (Structure Only)
 cellar add <game-name> --interactive       # Flag exists but interactive prompts not implemented
 ```
 
 ### ❌ Not Yet Implemented Commands
 ```bash
-# Installation and Setup Commands
-cellar installer <game-name> <installer>  # Run installer in existing game prefix
-cellar setup <game-name> --exe <path>     # Set executable after installation
-cellar scan <game-name>                   # Scan prefix for executables
-cellar finalize <game-name>               # Complete configuration after install
-
 # Configuration Management
 cellar config <game-name>                 # Show current config
 cellar config <game-name> edit            # Interactive config editor
@@ -733,6 +724,8 @@ cellar doctor/validate                    # System diagnostics
 
 # Integration
 cellar mangohud enable/disable/config     # MangoHUD management
+
+cellar add <game-name> --installer <path> # Add game with installer workflow
 ```
 
 ### 🔧 Technical Implementation Details
@@ -742,8 +735,8 @@ cellar mangohud enable/disable/config     # MangoHUD management
 - ✅ Environment variable management for Wine/Proton/DXVK/MangoHUD through LaunchExecutor
 - ✅ Game argument processing and launch option handling
 - ✅ Error filtering and output handling for clean user experience
-- ⚠️ GameScope integration configured but command construction needs implementation
-- ⚠️ MangoHUD integration configured but actual environment setup needs implementation
+- ✅ GameScope integration with full command construction and --mangoapp support
+- ✅ MangoHUD integration using 'mangohud' command wrapper (not environment variables)
 
 **Configuration Management:**
 - ✅ Comprehensive TOML-based configuration with all planned sections
@@ -778,22 +771,23 @@ cellar mangohud enable/disable/config     # MangoHUD management
 - ✅ Configuration file management with atomic operations
 - ✅ Archive extraction with proper error handling
 
-### 📋 Current Known Issues (from todo.md)
-- [x] Replace 'MANGOHUD=1' with 'mangohud' command
-- [ ] When adding a new game, if no proton version provided, use the latest available in cache
-- [ ] If specified proton version not found, download it after asking user for permission
-- [ ] Change runner add logic to require full version names (e.g., 'GE-Proton10-10' instead of '10-10')
-- [ ] Ask user if they want to delete the prefix when removing a game
-- [ ] Improve help messages especially when adding a game or creating a prefix
+**Installation Workflow:**
+- Manual installer execution within wine prefixes using existing launch infrastructure
+- Interactive user prompts for installation success/failure confirmation
+- Retry mechanism for failed installations
+- User-provided executable path validation with full system path support
+- Cleanup options for failed installations (keep prefix for troubleshooting or remove)
+- Installation metadata tracking (installer path, date, method)
+- Integration with existing `cellar add --installer` command
 
 ### 🎯 Immediate Next Steps for Full Functionality
 
 **High Priority (Essential Features Missing):**
 1. **Interactive Setup Implementation** - Critical for user experience
 2. **Desktop Integration** - .desktop file generation and symlink management
-3. **Manual Installation Workflow** - Complete installer execution and post-install setup
-4. **GameScope Command Construction** - Implement actual gamescope execution
-5. **MangoHUD Environment Setup** - Complete MangoHUD integration
+3. **Manual Installation Workflow** - **COMPLETED** - Complete installer execution and post-install setup
+4. ✅ **GameScope Command Construction** - **COMPLETED** - Implement actual gamescope execution
+5. ✅ **MangoHUD Environment Setup** - **COMPLETED** - Complete MangoHUD integration
 
 **Medium Priority (Quality of Life):**
 1. **Template and Preset Systems** - For easier game configuration
@@ -819,19 +813,21 @@ Target: 2-3 weeks
    - File browsing and path selection
    - Configuration preview and confirmation
 
-2. Desktop Integration  
+2. Desktop Integration
    - .desktop file generation with proper categories and metadata
    - Icon extraction from executables or default icons
    - Symlink management to ~/.local/share/applications/
 
-3. Manual Installation Workflow
-   - Installer execution within prefixes
-   - Post-installation executable scanning and detection
-   - Installation progress monitoring and completion handling
+3. Manual Installation Workflow - **COMPLETED**
+   - Installer execution within prefixes using existing CommandBuilder infrastructure
+   - User prompts for installation success/failure with retry option
+   - Manual executable path input with validation
+   - Cleanup options for failed installations (keep/remove prefix)
+   - Installation metadata tracking with InstallationInfo
 
 4. GameScope and MangoHUD Execution
-   - Complete gamescope command construction and execution
-   - MangoHUD environment variable setup and execution
+   - ✅ Complete gamescope command construction and execution
+   - ✅ MangoHUD command wrapper and --mangoapp integration
    - Integration testing with actual games
 
 5. Configuration Management

@@ -11,7 +11,7 @@ mod tests {
                 wine_prefix: std::path::PathBuf::from("/path/to/prefix"),
                 proton_version: "GE-Proton8-32".to_string(),
                 dxvk_version: None,
-                status: "configured".to_string(),
+
                 template: None,
                 preset: None,
             },
@@ -27,7 +27,6 @@ mod tests {
 
         assert_eq!(config.game.name, "Test Game");
         assert_eq!(config.game.proton_version, "GE-Proton8-32");
-        assert_eq!(config.game.status, "configured");
         assert!(config.wine_config.esync);
         assert!(!config.mangohud.enabled);
         assert!(!config.gamescope.enabled);
@@ -42,7 +41,7 @@ mod tests {
                 wine_prefix: std::path::PathBuf::from("/path/to/prefix"),
                 proton_version: "GE-Proton8-32".to_string(),
                 dxvk_version: None,
-                status: "configured".to_string(),
+
                 template: None,
                 preset: None,
             },
@@ -74,7 +73,6 @@ name = "Test Game"
 executable = "/path/to/game.exe"
 wine_prefix = "/path/to/prefix"
 proton_version = "GE-Proton8-32"
-status = "configured"
 
 [launch]
 launch_options = "PROTON_ENABLE_WAYLAND=1 %command%"

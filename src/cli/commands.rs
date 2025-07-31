@@ -51,7 +51,7 @@ pub enum Commands {
         /// Name of the game
         name: String,
     },
-    /// Show game status
+    /// List games
     Status {
         /// Name of the game (optional, shows all if not provided)
         name: Option<String>,
@@ -182,25 +182,34 @@ pub async fn launch_game(name: String) -> Result<()> {
     launcher.launch_game_by_name(&name).await
 }
 
-pub fn list_games() -> Result<()> {
+pub fn list_games(name: Option<String>) -> Result<()> {
     let dirs = CellarDirectories::new()?;
-    let games = dirs.list_game_configs()?;
 
-    if games.is_empty() {
-        println!("No games configured.");
-        return Ok(());
-    }
+    match name {
+        Some(game_name) => {
+            let config = load_game_config(&dirs, &game_name)?;
+            println!("Game: {}", config.game.name);
+        }
+        None => {
+            let games = dirs.list_game_configs()?;
 
-    println!("Configured games:");
-    for game_name in games {
-        match load_game_config(&dirs, &game_name) {
-            Ok(config) => {
-                println!("  {} [{}]", config.game.name, config.game.status);
-                println!("    Executable: {}", config.game.executable.display());
-                println!("    Proton: {}", config.game.proton_version);
+            if games.is_empty() {
+                println!("No games configured.");
+                return Ok(());
             }
-            Err(_) => {
-                println!("  {game_name} [error loading config]");
+
+            println!("Configured games:");
+            for game_name in &games {
+                match load_game_config(&dirs, &game_name) {
+                    Ok(config) => {
+                        println!("  {}", config.game.name);
+                        println!("    Executable: {}", config.game.executable.display());
+                        println!("    Proton: {}", config.game.proton_version);
+                    }
+                    Err(_) => {
+                        println!("  {game_name} [error loading config]");
+                    }
+                }
             }
         }
     }
@@ -228,7 +237,6 @@ pub fn show_game_info(name: String) -> Result<()> {
     let config = load_game_config(&dirs, &name)?;
 
     println!("Game Information for: {}", config.game.name);
-    println!("  Status: {}", config.game.status);
     println!("  Executable: {}", config.game.executable.display());
     println!("  Wine Prefix: {}", config.game.wine_prefix.display());
     println!("  Proton Version: {}", config.game.proton_version);
@@ -263,37 +271,6 @@ pub fn show_game_info(name: String) -> Result<()> {
         );
         println!("  Refresh Rate: {}Hz", config.gamescope.refresh_rate);
         println!("  Upscaling: {}", config.gamescope.upscaling);
-    }
-
-    Ok(())
-}
-
-pub fn show_status(name: Option<String>) -> Result<()> {
-    let dirs = CellarDirectories::new()?;
-
-    match name {
-        Some(game_name) => {
-            let config = load_game_config(&dirs, &game_name)?;
-            println!("Status for {}: {}", config.game.name, config.game.status);
-        }
-        None => {
-            let games = dirs.list_game_configs()?;
-            if games.is_empty() {
-                println!("No games configured.");
-            } else {
-                println!("Game Status Summary:");
-                for game_name in games {
-                    match load_game_config(&dirs, &game_name) {
-                        Ok(config) => {
-                            println!("  {}: {}", config.game.name, config.game.status);
-                        }
-                        Err(_) => {
-                            println!("  {game_name}: error");
-                        }
-                    }
-                }
-            }
-        }
     }
 
     Ok(())
@@ -372,7 +349,6 @@ async fn create_basic_game_config(
             wine_prefix,
             proton_version,
             dxvk_version: None,
-            status: "configured".to_string(),
             template: None,
             preset: None,
         },
