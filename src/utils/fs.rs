@@ -7,10 +7,10 @@ pub fn expand_tilde<P: AsRef<Path>>(path: P) -> Result<PathBuf> {
     let path = path.as_ref();
     let path_str = path.to_string_lossy();
     
-    if path_str.starts_with("~/") {
+    if let Some(without_tilde) = path_str.strip_prefix("~/") {
         let home_dir = dirs::home_dir()
             .ok_or_else(|| anyhow!("Unable to determine home directory"))?;
-        let without_tilde = &path_str[2..]; // Remove "~/"
+        // Remove "~/"
         Ok(home_dir.join(without_tilde))
     } else if path_str == "~" {
         dirs::home_dir()

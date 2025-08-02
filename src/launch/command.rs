@@ -149,14 +149,14 @@ impl CommandBuilder {
         if launch_options.is_empty() {
             // No launch options, wrap with mangohud first, then gamescope if enabled
             let mangohud_wrapped = self.wrap_with_mangohud(base_command)?;
-            return Ok(self.wrap_with_gamescope(mangohud_wrapped)?);
+            return self.wrap_with_gamescope(mangohud_wrapped);
         }
 
         // Parse launch options into tokens
         let tokens = self.parse_launch_options(launch_options)?;
 
         // Find and replace %command% placeholder
-        let mut final_command = Vec::new();
+        let mut final_command = Vec::with_capacity(tokens.len() + base_command.len());
         let mut found_command_placeholder = false;
 
         for token in tokens {
@@ -166,8 +166,8 @@ impl CommandBuilder {
                 }
                 found_command_placeholder = true;
 
-                // Replace %command% with the base command
-                final_command.extend(base_command.clone());
+                // Replace %command% with the base command without cloning
+                final_command.extend_from_slice(&base_command);
             } else {
                 final_command.push(token);
             }
@@ -175,7 +175,7 @@ impl CommandBuilder {
 
         if !found_command_placeholder {
             // No %command% placeholder found, append the base command at the end
-            final_command.extend(base_command);
+            final_command.extend_from_slice(&base_command);
         }
 
         // Wrap with mangohud first, then gamescope if enabled
@@ -183,14 +183,14 @@ impl CommandBuilder {
         self.wrap_with_gamescope(mangohud_wrapped)
     }
 
-    /// Parse launch options string into tokens, handling quotes and environment variables
+    /// Parse launch options string into tokens, handling quotes and environment variables safely
     fn parse_launch_options(&self, launch_options: &str) -> Result<Vec<String>> {
         let mut tokens = Vec::new();
         let mut current_token = String::new();
         let mut in_quotes = false;
-        let mut chars = launch_options.chars().peekable();
+        let chars = launch_options.chars().peekable();
 
-        while let Some(ch) = chars.next() {
+        for ch in chars {
             match ch {
                 '"' if !in_quotes => {
                     in_quotes = true;
@@ -200,7 +200,9 @@ impl CommandBuilder {
                 }
                 ' ' if !in_quotes => {
                     if !current_token.is_empty() {
-                        tokens.push(current_token.clone());
+                        // Validate and sanitize token before adding
+                        let sanitized = self.sanitize_token(&current_token)?;
+                        tokens.push(sanitized);
                         current_token.clear();
                     }
                 }
@@ -211,7 +213,8 @@ impl CommandBuilder {
         }
 
         if !current_token.is_empty() {
-            tokens.push(current_token);
+            let sanitized = self.sanitize_token(&current_token)?;
+            tokens.push(sanitized);
         }
 
         if in_quotes {
@@ -219,6 +222,80 @@ impl CommandBuilder {
         }
 
         Ok(tokens)
+    }
+
+    /// Sanitize a command token to prevent shell injection
+    fn sanitize_token(&self, token: &str) -> Result<String> {
+        // Check for dangerous characters and patterns
+        let dangerous_chars = ['|', '&', ';', '`', '$', '>', '<', '(', ')', '{', '}', '[', ']', '*', '?', '~'];
+        
+        for ch in dangerous_chars {
+            if token.contains(ch) {
+                return Err(anyhow!(
+                    "Dangerous character '{}' found in launch option: {}",
+                    ch,
+                    token
+                ));
+            }
+        }
+
+        // Check for dangerous patterns
+        let dangerous_patterns = ["../", "./", "//", "\\\\", "\n", "\r"];
+        for pattern in dangerous_patterns {
+            if token.contains(pattern) {
+                return Err(anyhow!(
+                    "Dangerous pattern '{}' found in launch option: {}",
+                    pattern,
+                    token
+                ));
+            }
+        }
+
+        // Ensure the token doesn't start with dangerous prefixes
+        let dangerous_prefixes = ["-", "--"];
+        for prefix in dangerous_prefixes {
+            if token.starts_with(prefix) && token != "%command%" {
+                // Allow well-known safe options only
+                if !self.is_safe_option(token) {
+                    return Err(anyhow!(
+                        "Potentially dangerous option: {}",
+                        token
+                    ));
+                }
+            }
+        }
+
+        Ok(token.to_string())
+    }
+
+    /// Check if an option is in the allowlist of safe options
+    fn is_safe_option(&self, option: &str) -> bool {
+        // Allowlist of safe command line options
+        let safe_options = [
+            // Common safe options
+            "--fullscreen",
+            "--windowed",
+            "--width",
+            "--height",
+            "--vsync",
+            "--no-vsync",
+            // Mangohud options
+            "--dlsym",
+            // Gamescope options
+            "-f", "-w", "-h", "-W", "-H", "-r", "-F", "-S", "-n", "-b",
+            "--force-grab-cursor",
+            "--expose-wayland",
+            "--hdr-enabled",
+            "--adaptive-sync",
+            "--immediate-flips",
+            "--mangoapp",
+        ];
+
+        safe_options.contains(&option) || 
+        // Allow numeric values
+        option.parse::<i32>().is_ok() ||
+        // Allow resolution patterns like "1920x1080"
+        option.matches('x').count() == 1 && option.split('x').all(|s| s.parse::<u32>().is_ok())
     }
 
     /// Wrap command with mangohud if enabled (but not when gamescope is enabled)

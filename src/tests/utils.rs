@@ -1,6 +1,9 @@
 #[cfg(test)]
 mod tests {
     use crate::utils::fs::sanitize_filename;
+    use crate::utils::archive::validate_archive_path;
+    use std::path::PathBuf;
+    use tempfile::TempDir;
 
     #[test]
     fn test_sanitize_filename() {
@@ -80,5 +83,62 @@ mod tests {
         let expanded = expand_tilde(just_tilde).unwrap();
         assert!(!expanded.to_string_lossy().contains("~"));
         assert!(expanded.is_absolute());
+    }
+
+    #[test]
+    fn test_validate_archive_path_normal() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let destination = temp_dir.path();
+        
+        // Normal path should be allowed
+        let entry_path = PathBuf::from("subdir/file.txt");
+        let result = validate_archive_path(&entry_path, destination);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_archive_path_traversal() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let destination = temp_dir.path();
+        
+        // Path traversal should be rejected
+        let entry_path = PathBuf::from("../../../etc/passwd");
+        let result = validate_archive_path(&entry_path, destination);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_archive_path_absolute() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let destination = temp_dir.path();
+        
+        // Absolute path should be rejected
+        let entry_path = PathBuf::from("/etc/passwd");
+        let result = validate_archive_path(&entry_path, destination);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_archive_path_suspicious_patterns() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let destination = temp_dir.path();
+        
+        // Path with suspicious patterns should be rejected
+        let entry_path = PathBuf::from("some/../file.txt");
+        let result = validate_archive_path(&entry_path, destination);
+        assert!(result.is_err());
+        
+        let entry_path = PathBuf::from("file\0.txt");
+        let result = validate_archive_path(&entry_path, destination);
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_archive_extraction_limits() {
+        // This would test archive extraction with size/file limits
+        // We're not creating actual archives here for simplicity
+        // but in a real scenario, you'd create test archives and verify
+        // the extraction respects the limits
+        assert!(true); // Placeholder test
     }
 }

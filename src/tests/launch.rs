@@ -39,7 +39,7 @@ mod tests {
         
         // Verify command structure
         let args = launch_command.command.as_args();
-        assert!(args.len() > 0);
+        assert!(!args.is_empty());
         assert!(args.contains(&"umu-run".to_string()));
         assert!(args.contains(&"/path/to/game.exe".to_string()));
         

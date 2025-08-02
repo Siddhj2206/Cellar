@@ -95,6 +95,7 @@ pub struct GamescopeConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct MangohudConfig {
     #[serde(default)]
     pub enabled: bool,
@@ -206,13 +207,6 @@ impl Default for GamescopeConfig {
     }
 }
 
-impl Default for MangohudConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-        }
-    }
-}
 
 impl Default for DesktopConfig {
     fn default() -> Self {

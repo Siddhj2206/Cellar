@@ -127,7 +127,7 @@ impl GameLauncher {
         let cmd_args = launch_command.command.args();
 
         println!("Executing command:");
-        println!("  Program: {}", program);
+        println!("  Program: {program}");
         if !cmd_args.is_empty() {
             println!("  Arguments: {}", cmd_args.join(" "));
         }
@@ -155,7 +155,7 @@ impl GameLauncher {
         let command_line = self.shell_quote_command(args);
 
         println!("Executing shell command:");
-        println!("  Command: {}", command_line);
+        println!("  Command: {command_line}");
 
         // Print environment variables that are game-specific (filter out system ones)
         self.print_environment_variables(&launch_command.environment);
@@ -191,7 +191,7 @@ impl GameLauncher {
         if !interesting_env_vars.is_empty() {
             println!("  Environment variables:");
             for (key, value) in interesting_env_vars {
-                println!("    {}={}", key, value);
+                println!("    {key}={value}");
             }
         }
     }

@@ -200,7 +200,7 @@ pub fn list_games(name: Option<String>) -> Result<()> {
 
             println!("Configured games:");
             for game_name in &games {
-                match load_game_config(&dirs, &game_name) {
+                match load_game_config(&dirs, game_name) {
                     Ok(config) => {
                         println!("  {}", config.game.name);
                         println!("    Executable: {}", config.game.executable.display());
@@ -293,7 +293,7 @@ async fn create_basic_game_config(
     // Determine Proton version to use BEFORE creating prefix
     let proton_version = match proton_version {
         Some(version) => {
-            println!("Using specified Proton version: {}", version);
+            println!("Using specified Proton version: {version}");
 
             // Check if the specified version is available locally
             let proton_manager = ProtonManager::new(dirs.get_runners_path());
@@ -303,7 +303,7 @@ async fn create_basic_game_config(
                 .any(|r| r.version == version || r.name.contains(version));
 
             if !version_found {
-                println!("Proton version '{}' not found locally.", version);
+                println!("Proton version '{version}' not found locally.");
 
                 // Check if version is available for download
                 match check_proton_version_available(&proton_manager, version).await {
@@ -311,7 +311,7 @@ async fn create_basic_game_config(
                         // Ask user for permission to download
                         if prompt_user_for_download(version).await? {
                             download_and_install_proton(&proton_manager, &download_version).await?;
-                            println!("Successfully installed Proton version: {}", version);
+                            println!("Successfully installed Proton version: {version}");
                         } else {
                             return Err(anyhow!("Proton version '{}' is required but not available locally. Operation cancelled.", version));
                         }
@@ -330,7 +330,7 @@ async fn create_basic_game_config(
         None => {
             println!("No Proton version specified, finding latest available...");
             let latest_version = get_latest_proton_version(dirs).await?;
-            println!("Using latest available Proton version: {}", latest_version);
+            println!("Using latest available Proton version: {latest_version}");
             latest_version
         }
     };
@@ -339,7 +339,7 @@ async fn create_basic_game_config(
     if !wine_prefix.exists() {
         create_prefix(&prefix_name, Some(&proton_version)).await?;
     } else {
-        println!("Using existing prefix: {}", prefix_name);
+        println!("Using existing prefix: {prefix_name}");
     }
 
     let config = GameConfig {
@@ -429,7 +429,7 @@ async fn check_proton_version_available(
     // Try partial match (e.g., user provides "9-1" for "GE-Proton9-1")
     if let Some(found) = available_versions
         .iter()
-        .find(|v| v.contains(version) || v.ends_with(&format!("-{}", version)))
+        .find(|v| v.contains(version) || v.ends_with(&format!("-{version}")))
     {
         return Ok(found.clone());
     }
@@ -444,7 +444,7 @@ async fn check_proton_version_available(
 async fn prompt_user_for_download(version: &str) -> Result<bool> {
     use std::io::{self, Write};
 
-    print!("Download Proton version '{}'? [y/N]: ", version);
+    print!("Download Proton version '{version}'? [y/N]: ");
     io::stdout().flush()?;
 
     let mut input = String::new();
@@ -456,7 +456,7 @@ async fn prompt_user_for_download(version: &str) -> Result<bool> {
 
 /// Download and install a Proton version
 async fn download_and_install_proton(proton_manager: &ProtonManager, version: &str) -> Result<()> {
-    println!("Downloading Proton version: {}", version);
+    println!("Downloading Proton version: {version}");
 
     // Extract the actual version number from the full version string
     // e.g., "GE-Proton10-10" -> "10-10"
@@ -469,7 +469,7 @@ async fn download_and_install_proton(proton_manager: &ProtonManager, version: &s
     let download_path = proton_manager
         .download_runner("proton-ge", version_number)
         .await?;
-    println!("Installing Proton version: {}", version);
+    println!("Installing Proton version: {version}");
 
     proton_manager
         .install_runner(&download_path, std::path::Path::new(""))
