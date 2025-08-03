@@ -232,7 +232,7 @@ impl CommandBuilder {
     fn sanitize_token(&self, token: &str) -> Result<String> {
         // Check for dangerous characters and patterns
         let dangerous_chars = [
-            '|', '&', ';', '`', '$', '>', '<', '(', ')', '{', '}', '[', ']', '*', '?', '~', '\n',
+            '|', '&', ';', '`', '$', '(', ')', '{', '}', '[', ']', '*', '?', '~', '\n',
             '\r', '\t', '\'', '"',
         ];
 
