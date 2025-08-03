@@ -397,11 +397,14 @@ async fn create_basic_game_config(
             // Check if the specified version is available locally
             let proton_manager = ProtonManager::new(dirs.get_runners_path());
             let local_runners = proton_manager.discover_local_runners().await?;
-            let version_found = local_runners
+            
+            // Find the matching runner and get its full version name
+            if let Some(matched_runner) = local_runners
                 .iter()
-                .any(|r| r.version == version || r.name.contains(version));
-
-            if !version_found {
+                .find(|r| r.version == version || r.name.contains(version)) {
+                // Use the full version name from the matched runner
+                matched_runner.version.clone()
+            } else {
                 println!("Proton version '{version}' not found locally.");
 
                 // Check if version is available for download
@@ -411,6 +414,16 @@ async fn create_basic_game_config(
                         if prompt_user_for_download(version).await? {
                             download_and_install_proton(&proton_manager, &download_version).await?;
                             println!("Successfully installed Proton version: {version}");
+                            
+                            // After installation, find the full version name
+                            let updated_runners = proton_manager.discover_local_runners().await?;
+                            if let Some(installed_runner) = updated_runners
+                                .iter()
+                                .find(|r| r.version == version || r.name.contains(version) || r.version.contains(version)) {
+                                installed_runner.version.clone()
+                            } else {
+                                download_version
+                            }
                         } else {
                             return Err(anyhow!("Proton version '{}' is required but not available locally. Operation cancelled.", version));
                         }
@@ -423,8 +436,6 @@ async fn create_basic_game_config(
                     }
                 }
             }
-
-            version.to_string()
         }
         None => {
             println!("No Proton version specified, finding latest available...");
