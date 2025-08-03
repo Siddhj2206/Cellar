@@ -40,7 +40,15 @@ pub fn validate_archive_path(entry_path: &Path, destination: &Path) -> Result<Pa
     
     // Check if the path contains any suspicious patterns
     let path_str = normalized.to_string_lossy();
-    if path_str.contains("..") || path_str.starts_with('/') || path_str.contains('\0') {
+    if path_str.contains("..")
+        || path_str.starts_with('/')
+        || path_str.starts_with('\\')
+        || path_str.contains('\0')
+        || path_str.contains('\\')
+        || path_str.contains(".\\")
+        || path_str.contains("./")
+        || path_str.contains(":\\")
+    {
         return Err(anyhow!(
             "Suspicious path pattern detected: {:?}",
             entry_path
@@ -65,24 +73,39 @@ pub fn validate_archive_path(entry_path: &Path, destination: &Path) -> Result<Pa
             Ok(final_path)
         }
         Err(_) => {
-            // File doesn't exist yet, so we can't canonicalize
-            // Just ensure the parent components are safe
+            // Create parent directories if they do not exist, then re-attempt canonicalization
             if let Some(parent) = final_path.parent() {
-                if parent.exists() {
-                    let canonical_parent = parent.canonicalize()
-                        .map_err(|e| anyhow!("Failed to canonicalize parent: {}", e))?;
-                    let canonical_dest = destination.canonicalize()
-                        .map_err(|e| anyhow!("Failed to canonicalize destination: {}", e))?;
-                    
-                    if !canonical_parent.starts_with(&canonical_dest) {
+                if !parent.exists() {
+                    std::fs::create_dir_all(parent)
+                        .map_err(|e| anyhow!("Failed to create parent directories: {}", e))?;
+                }
+                // Now try to canonicalize the final path again
+                match final_path.canonicalize() {
+                    Ok(canonical) => {
+                        let canonical_dest = destination.canonicalize()
+                            .map_err(|e| anyhow!("Failed to canonicalize destination: {}", e))?;
+                        if !canonical.starts_with(&canonical_dest) {
+                            return Err(anyhow!(
+                                "Path escapes destination directory: {:?}",
+                                entry_path
+                            ));
+                        }
+                        Ok(final_path)
+                    }
+                    Err(e) => {
                         return Err(anyhow!(
-                            "Path escapes destination directory: {:?}",
-                            entry_path
+                            "Failed to canonicalize path after creating parent directories: {:?}, error: {}",
+                            entry_path,
+                            e
                         ));
                     }
                 }
+            } else {
+                return Err(anyhow!(
+                    "Final path has no parent: {:?}",
+                    entry_path
+                ));
             }
-            Ok(final_path)
         }
     }
 }

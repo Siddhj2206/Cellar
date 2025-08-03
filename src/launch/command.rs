@@ -231,8 +231,11 @@ impl CommandBuilder {
     /// Sanitize a command token to prevent shell injection
     fn sanitize_token(&self, token: &str) -> Result<String> {
         // Check for dangerous characters and patterns
-        let dangerous_chars = ['|', '&', ';', '`', '$', '>', '<', '(', ')', '{', '}', '[', ']', '*', '?', '~'];
-        
+        let dangerous_chars = [
+            '|', '&', ';', '`', '$', '>', '<', '(', ')', '{', '}', '[', ']', '*', '?', '~', '\n',
+            '\r', '\t', '\'', '"',
+        ];
+
         for ch in dangerous_chars {
             if token.contains(ch) {
                 return Err(anyhow!(
@@ -261,10 +264,7 @@ impl CommandBuilder {
             if token.starts_with(prefix) && token != "%command%" {
                 // Allow well-known safe options only
                 if !self.is_safe_option(token) {
-                    return Err(anyhow!(
-                        "Potentially dangerous option: {}",
-                        token
-                    ));
+                    return Err(anyhow!("Potentially dangerous option: {}", token));
                 }
             }
         }
@@ -286,7 +286,16 @@ impl CommandBuilder {
             // Mangohud options
             "--dlsym",
             // Gamescope options
-            "-f", "-w", "-h", "-W", "-H", "-r", "-F", "-S", "-n", "-b",
+            "-f",
+            "-w",
+            "-h",
+            "-W",
+            "-H",
+            "-r",
+            "-F",
+            "-S",
+            "-n",
+            "-b",
             "--force-grab-cursor",
             "--expose-wayland",
             "--hdr-enabled",
@@ -295,7 +304,7 @@ impl CommandBuilder {
             "--mangoapp",
         ];
 
-        safe_options.contains(&option) || 
+        safe_options.contains(&option) ||
         // Allow numeric values
         option.parse::<i32>().is_ok() ||
         // Allow resolution patterns like "1920x1080"
@@ -423,5 +432,3 @@ pub struct LaunchCommand {
     pub environment: HashMap<String, String>,
     pub working_directory: PathBuf,
 }
-
-
