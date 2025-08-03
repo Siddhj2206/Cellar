@@ -44,7 +44,6 @@ pub fn validate_archive_path(entry_path: &Path, destination: &Path) -> Result<Pa
         || path_str.starts_with('/')
         || path_str.starts_with('\\')
         || path_str.contains('\0')
-        || path_str.contains('\\')
         || path_str.contains(".\\")
         || path_str.contains("./")
         || path_str.contains(":\\")
