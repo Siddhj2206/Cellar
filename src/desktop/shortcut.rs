@@ -10,7 +10,8 @@ async fn get_cellar_binary_path() -> Result<String> {
     let output = tokio::process::Command::new("which")
         .arg("cellar")
         .output()
-        .await?;
+        .await
+        .map_err(|e| anyhow!("Failed to run 'which cellar': {}", e))?;
     
     if output.status.success() {
         let path = String::from_utf8(output.stdout)?
