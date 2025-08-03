@@ -274,7 +274,7 @@ cellar add "Witcher 3"
 1. **Project Setup** - ✅ DONE
    - Cargo project with required dependencies (clap, serde, toml, anyhow, tokio, reqwest, etc.)
    - CLI argument parsing with `clap` derive macros
-   - Modular project structure with separate modules for CLI, config, launch, runners, utils
+   - Modular project structure with separate modules for CLI, config, launch, runners, utils, desktop
 
 2. **Configuration System** - ✅ DONE
    - TOML serialization/deserialization with comprehensive GameConfig structure
@@ -287,6 +287,8 @@ cellar add "Witcher 3"
    - Configuration file management in configs/ directory
    - Game status tracking (configured, installing, installed, incomplete)
    - Game removal and info display commands
+   - Automatic proton version selection if none specified
+   - Automatic downloading of missing proton versions with user confirmation
 
 ### ✅ Phase 2: Runner Management (COMPLETED)
 4. **Runner Discovery and Management** - ✅ DONE
@@ -295,6 +297,7 @@ cellar add "Witcher 3"
    - `cellar runners list`, `refresh`, `available`, `install`, `remove` commands
    - GitHub API integration for downloading Proton-GE and DXVK releases
    - Local installation with tar/zip extraction support
+   - Runner caching system with automatic expiration
 
 5. **DXVK Integration** - ✅ DONE
    - DXVK version downloading and management
@@ -306,6 +309,7 @@ cellar add "Witcher 3"
    - `cellar prefix remove`, `list`, `run` commands
    - Prefix creation workflow with environment variable setup
    - Proton version marker files for auto-detection
+   - Auto-detection of proton prefixes during execution
 
 ### ✅ Phase 3: Launch System (COMPLETED)
 7. **umu-launcher Integration** - ✅ DONE
@@ -322,50 +326,72 @@ cellar add "Witcher 3"
    - DXVK configuration with HUD settings
    - GameScope and MangoHUD configuration structures
 
-### Phase 4: Installation and Desktop Features
-9. **Manual Installation Workflow**
-   - Basic installer support planned but not fully implemented
-   - Need to implement `cellar install` to run installers within a prefix
-   - Need desktop shortcut creation
-   - Need post-installation executable detection and scanning
+### ✅ Phase 4: Desktop Integration (COMPLETED)
+9. **Desktop Shortcut Management** - ✅ DONE
+   - `cellar shortcut create`, `remove`, `sync`, `list` commands implemented
+   - Desktop file generation with proper categories and metadata
+   - Icon extraction from executables with fallback to default icons
+   - `cellar shortcut extract-icon` and `list-icons` commands
+   - Automatic shortcut creation during game addition
+   - Automatic shortcut removal during game removal
 
-10. **Desktop Integration** - ❌ NOT STARTED
-    - .desktop file generation not implemented
-    - Icon extraction from executables not implemented
+10. **Icon Management** - ✅ DONE
+    - Icon extraction from Windows executables using `wrestool`
+    - PNG conversion using ImageMagick
+    - Icon caching and management in icons/ directory
+    - Fallback to default wine icons when extraction fails
 
+### ❌ Phase 5: Enhanced Features (PARTIALLY IMPLEMENTED)
 11. **Interactive Setup** - ❌ NOT STARTED
     - User-friendly setup wizards not implemented
     - Configuration validation and preview not implemented
     - File browsing and path selection not implemented
 
-### ❌ Phase 5: Enhanced Features (NOT STARTED)
-12. **Gamescope Integration** - 🔄 PARTIAL
+12. **Gamescope Integration** - ✅ COMPLETED
     - Gamescope configuration structure exists in config
-    - Command construction and execution not implemented
-    - Resolution and scaling configuration not implemented
-    - Display option management not implemented
+    - Command construction and execution implemented in launch system
+    - Resolution and scaling configuration implemented
+    - Display option management implemented
+    - Full gamescope support including --mangoapp integration
 
-12. **MangoHUD Integration** - 🔄 PARTIAL
+13. **MangoHUD Integration** - ✅ COMPLETED
     - MangoHUD configuration structure exists in config
     - MangoHUD integration using 'mangohud' command wrapper implemented
     - Configuration is managed through game config files
+    - Proper integration with gamescope --mangoapp mode
 
-### ❌ Phase 6: Utilities (NOT STARTED)
-13. **Temporary Execution** - ❌ NOT STARTED
+### ❌ Phase 6: Manual Installation & Configuration (NOT STARTED)
+14. **Manual Installation Workflow** - ❌ NOT STARTED
+    - Installer execution within prefixes not implemented
+    - Post-installation executable detection and scanning not implemented
+    - Installation status tracking and recovery not implemented
+
+15. **Configuration Management** - ❌ NOT STARTED
+    - Interactive config editing not implemented
+    - Quick config changes via command line (key=value syntax) not implemented
+    - Config validation and repair functionality not implemented
+
+### ❌ Phase 7: Utilities (NOT STARTED)
+16. **Temporary Execution** - ❌ NOT STARTED
     - Prefix-based temporary execution not implemented
     - Utility command shortcuts (winetricks, winecfg, etc.) not implemented
     - Temporary prefix management not implemented
 
-### ❌ Phase 7: Polish and Testing (PARTIALLY IMPLEMENTED)
-14. **Error Handling and Validation** - 🔄 PARTIAL
+### 🔄 Phase 8: Polish and Testing (PARTIALLY IMPLEMENTED)
+17. **Error Handling and Validation** - 🔄 PARTIAL
     - Basic error handling with anyhow implemented
     - Configuration validation partially implemented
-    - Need comprehensive error messages
+    - Need comprehensive error messages and user-friendly feedback
 
-16. **Testing and Documentation** - 🔄 PARTIAL
+18. **Testing and Documentation** - 🔄 PARTIAL
     - Test modules exist but may not be comprehensive
     - User documentation exists in plan.md
     - Need more example configurations and integration tests
+
+19. **System Maintenance** - ❌ NOT STARTED
+    - Cleanup utilities for temporary files and broken links not implemented
+    - System health checking not implemented
+    - Automated troubleshooting not implemented
 
 ## Current Working Features
 
@@ -392,38 +418,48 @@ cellar runners remove dxvk <version>     # Remove installed DXVK version
 cellar runners install-dxvk <version> <prefix> # Install DXVK into specific prefix
 
 # Prefix Management (Full Implementation)
-cellar prefix create <name> --proton <version> # Create Proton-enabled prefix
-cellar prefix create <name>               # Create basic Wine prefix
+cellar prefix create <n> --proton <version> # Create Proton-enabled prefix
+cellar prefix create <n>                  # Create basic Wine prefix
 cellar prefix list                        # List all managed prefixes
-cellar prefix remove <name>               # Remove prefix and all contents
+cellar prefix remove <n>                  # Remove prefix and all contents
 cellar prefix run <prefix> <exe> --proton <version> # Run executable with Proton
 cellar prefix run <prefix> <exe>          # Run executable (auto-detect Proton)
+
+# Desktop Integration (Full Implementation)
+cellar shortcut create <game-name>        # Create desktop shortcut
+cellar shortcut remove <game-name>        # Remove desktop shortcut
+cellar shortcut sync                      # Sync all desktop shortcuts
+cellar shortcut list                      # List all desktop shortcuts
+cellar shortcut extract-icon <game-name>  # Extract icon from game executable
+cellar shortcut list-icons                # List all extracted icons
 ```
 
 ### 🔄 Partially Implemented Features
 ```bash
 # Interactive Setup (Structure Only)
 cellar add <game-name> --interactive       # Flag exists but interactive prompts not implemented
+cellar add <game-name> --installer <path>  # Installer flag exists but workflow not implemented
 ```
 
 ### ❌ Not Yet Implemented Commands
 ```bash
+# Manual Installation Workflow
+cellar add <game-name> --installer <path> # Add game with installer workflow
+cellar install <game-name> <installer>    # Run installer in game prefix
+cellar setup <game-name> --exe <path>     # Set executable after installation
+cellar scan <game-name>                   # Scan prefix for executables
+
 # Configuration Management
 cellar config <game-name>                 # Show current config
 cellar config <game-name> edit            # Interactive config editor
 cellar config <game-name> <key>=<value>   # Quick config changes
 
-# Desktop Integration
-cellar shortcut create <game-name>        # Create desktop shortcut
-cellar shortcut remove <game-name>        # Remove shortcut
-cellar shortcut sync                      # Sync all shortcuts
-
 # Utilities
 cellar exec <prefix> <executable>         # Temporary execution
 cellar winetricks/winecfg/regedit <prefix> # Utility shortcuts
 cellar clean                              # Cleanup temp files
-
-cellar add <game-name> --installer <path> # Add game with installer workflow
+cellar check                              # Verify configurations
+cellar repair <game-name>                 # Repair broken game config
 ```
 
 ### 🔧 Technical Implementation Details
@@ -442,6 +478,7 @@ cellar add <game-name> --installer <path> # Add game with installer workflow
 - ✅ Sanitized filename generation for game configs
 - ✅ Directory structure management through CellarDirectories utility
 - ✅ Support for all wine options (esync, fsync, dxvk, dxvk_async, large_address_aware)
+- ✅ Automatic proton version detection and downloading with user confirmation
 
 **Prefix Management:**
 - ✅ Proton prefix creation with proper environment variable setup
@@ -456,6 +493,7 @@ cellar add <game-name> --installer <path> # Add game with installer workflow
 - ✅ RunnerManager trait-based architecture for extensibility
 - ✅ Proton-GE and DXVK version management
 - ✅ Installation verification and caching
+- ✅ Runner cache system with automatic expiration
 
 **CLI Architecture:**
 - ✅ Clap-based command structure with proper subcommands
@@ -469,6 +507,13 @@ cellar add <game-name> --installer <path> # Add game with installer workflow
 - ✅ Configuration file management with atomic operations
 - ✅ Archive extraction with proper error handling
 
+**Desktop Integration:**
+- ✅ Desktop file generation with proper categories and metadata
+- ✅ Icon extraction from Windows executables with fallback support
+- ✅ Desktop shortcut management with create/remove/sync/list operations
+- ✅ Automatic shortcut creation during game addition
+- ✅ Icon caching and management system
+
 **Installation Workflow:**
 - Manual installer execution within wine prefixes using existing launch infrastructure
 - Interactive user prompts for installation success/failure confirmation
@@ -476,29 +521,29 @@ cellar add <game-name> --installer <path> # Add game with installer workflow
 - User-provided executable path validation with full system path support
 - Cleanup options for failed installations (keep prefix for troubleshooting or remove)
 - Installation metadata tracking (installer path, date, method)
-- Integration with existing `cellar add --installer` command
+- Integration with existing `cellar add --installer` command (FLAG EXISTS BUT NOT IMPLEMENTED)
 
 ### 🎯 Immediate Next Steps for Full Functionality
 
-**High Priority (Essential Features Missing):**
-1. **Interactive Setup Implementation** - Critical for user experience
-2. **Desktop Integration** - .desktop file generation
-3. **Manual Installation Workflow** - **COMPLETED** - Complete installer execution and post-install setup
-4. ✅ **GameScope Command Construction** - **COMPLETED** - Implement actual gamescope execution
-5. ✅ **MangoHUD Environment Setup** - **COMPLETED** - Complete MangoHUD integration
+**High Priority (Essential Missing Features):**
+1. **Interactive Setup Implementation** - Critical for user experience and workflow simplification
+2. **Manual Installation Workflow** - Complete installer execution and post-install setup
+3. **Configuration Management Commands** - Interactive config editing and quick config changes
 
 **Medium Priority (Quality of Life):**
-1. **Configuration Management Commands** - Interactive config editing
+1. **System Maintenance** - Cleanup utilities and health checking
+2. **Enhanced Error Recovery** - Repair and fix commands
+3. **Improved CLI Experience** - Better help messages and progress indicators
 
 **Low Priority (Polish and Advanced Features):**
 1. **Temporary Execution Utilities** - winetricks, winecfg shortcuts
-2. **Advanced Error Recovery** - Repair and fix commands
+2. **Advanced Diagnostics** - Performance monitoring and optimization suggestions
 3. **Comprehensive Testing** - Integration and unit tests
 4. **Performance Optimizations** - Caching and efficiency improvements
 
 ## Implementation Roadmap
 
-### 🚀 Phase 4: Essential Missing Features (HIGH PRIORITY)
+### 🚀 Phase 5: Essential Missing Features (HIGH PRIORITY)
 ```bash
 # Focus: Complete core functionality for basic usability
 Target: 2-3 weeks
@@ -508,40 +553,33 @@ Target: 2-3 weeks
    - File browsing and path selection
    - Configuration preview and confirmation
 
-2. Desktop Integration
-   - .desktop file generation with proper categories and metadata
-   - Icon extraction from executables or default icons
-
-3. Manual Installation Workflow - **COMPLETED**
+2. Manual Installation Workflow
    - Installer execution within prefixes using existing CommandBuilder infrastructure
    - User prompts for installation success/failure with retry option
    - Manual executable path input with validation
    - Cleanup options for failed installations (keep/remove prefix)
    - Installation metadata tracking with InstallationInfo
+   - Executable scanning and selection after installation
 
-4. GameScope and MangoHUD Execution
-   - ✅ Complete gamescope command construction and execution
-   - ✅ MangoHUD command wrapper and --mangoapp integration
-   - Integration testing with actual games
-
-5. Configuration Management
+3. Configuration Management
    - Interactive config editing with prompts
    - Quick config changes via command line (key=value syntax)
    - Config validation and repair functionality
 ```
 
-### 🛠️ Phase 5: Quality of Life Features (MEDIUM PRIORITY)
+### 🛠️ Phase 6: Quality of Life Features (MEDIUM PRIORITY)
 ```bash
 # Focus: Improve user experience and workflow efficiency
 Target: 3-4 weeks
 
 1. System Maintenance
    - Cleanup utilities for temporary files and broken links
+   - System health checking and verification
 
 2. Enhanced Installation Workflow
-   - Executable scanning and selection after installation
    - Installation status tracking and recovery
    - Better installer progress monitoring
+   - Installation wizard improvements
 
 3. Improved CLI Experience
    - Better help messages and examples
@@ -549,7 +587,7 @@ Target: 3-4 weeks
    - More intuitive command organization
 ```
 
-### 🎯 Phase 6: Advanced Features (LOW PRIORITY)
+### 🎯 Phase 7: Advanced Features (LOW PRIORITY)
 ```bash
 # Focus: Advanced functionality and polish
 Target: 4-6 weeks
@@ -570,7 +608,7 @@ Target: 4-6 weeks
    - Advanced logging and debugging capabilities
 ```
 
-### 🧪 Phase 7: Testing and Documentation (ONGOING)
+### 🧪 Phase 8: Testing and Documentation (ONGOING)
 ```bash
 # Focus: Reliability and user documentation
 Target: Ongoing throughout development
@@ -680,36 +718,36 @@ src/
 ## Success Criteria
 
 1. **Functional Requirements**
-   - Create and manage wine prefixes
-   - Download and install Proton-GE versions locally
-   - Launch games through umu-launcher with custom configurations
-   - Support Steam-style launch commands with `%command%`
-   - Handle manual game installation workflow
-   - Generate desktop shortcuts
-   - Interactive setup and configuration editing
-   - Temporary execution of utilities in prefixes
-   - MangoHUD integration for performance monitoring
+   - Create and manage wine prefixes ✅ IMPLEMENTED
+   - Download and install Proton-GE versions locally ✅ IMPLEMENTED
+   - Launch games through umu-launcher with custom configurations ✅ IMPLEMENTED
+   - Support Steam-style launch commands with `%command%` ✅ IMPLEMENTED
+   - Handle manual game installation workflow ❌ NOT IMPLEMENTED
+   - Generate desktop shortcuts ✅ IMPLEMENTED
+   - Interactive setup and configuration editing 🔄 PARTIAL (flag exists, not implemented)
+   - Temporary execution of utilities in prefixes ❌ NOT IMPLEMENTED
+   - MangoHUD integration for performance monitoring ✅ IMPLEMENTED
 
 2. **Quality Requirements**
-   - Comprehensive error handling and user feedback
-   - Clean, maintainable code structure
-   - Efficient download and installation processes
-   - Intuitive CLI interface with logical command grouping
-   - Robust configuration validation and health checking
+   - Comprehensive error handling and user feedback ✅ MOSTLY IMPLEMENTED
+   - Clean, maintainable code structure ✅ IMPLEMENTED
+   - Efficient download and installation processes ✅ IMPLEMENTED
+   - Intuitive CLI interface with logical command grouping ✅ IMPLEMENTED
+   - Robust configuration validation and health checking ✅ IMPLEMENTED
 
 3. **User Experience**
-   - Simple game setup process with clear workflows
-   - Manual installer support with guided process
-   - Desktop integration with application menu shortcuts
-   - Clear status messages and progress indicators
-   - Flexible configuration options
-   - Reliable game launching with gamescope and MangoHUD support
+   - Simple game setup process with clear workflows ✅ IMPLEMENTED
+   - Manual installer support with guided process ❌ NOT IMPLEMENTED
+   - Desktop integration with application menu shortcuts ✅ IMPLEMENTED
+   - Clear status messages and progress indicators 🔄 PARTIAL
+   - Flexible configuration options ✅ IMPLEMENTED
+   - Reliable game launching with gamescope and MangoHUD support ✅ IMPLEMENTED
 
 4. **Technical Requirements**
-   - Local runner management
-   - Portable project structure
-   - Efficient shortcut management
-   - Support for both existing games and new installations
-   - Temporary prefix execution for utilities
+   - Local runner management ✅ IMPLEMENTED
+   - Portable project structure ✅ IMPLEMENTED
+   - Efficient shortcut management ✅ IMPLEMENTED
+   - Support for both existing games and new installations 🔄 PARTIAL (installer workflow missing)
+   - Temporary prefix execution for utilities ❌ NOT IMPLEMENTED
 
 This plan provides a comprehensive roadmap for implementing all requested features while maintaining good software engineering practices and user experience. The redesigned CLI interface makes the tool more intuitive and supports both simple game addition and complex installation workflows.

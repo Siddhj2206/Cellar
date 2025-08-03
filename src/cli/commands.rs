@@ -262,6 +262,14 @@ pub fn remove_game(name: String) -> Result<()> {
         return Err(anyhow!("Game '{}' not found", name));
     }
 
+    // Load the config to get the prefix path
+    let config = load_game_config(&dirs, &name)?;
+    let prefix_path = &config.game.wine_prefix;
+    let prefix_name = prefix_path.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown");
+
+    // Remove the game config file
     fs::remove_file(&config_path).map_err(|e| anyhow!("Failed to remove config file: {}", e))?;
 
     // Remove desktop shortcut if it exists
@@ -269,9 +277,66 @@ pub fn remove_game(name: String) -> Result<()> {
         eprintln!("Warning: Failed to remove desktop shortcut: {}", e);
     }
 
+    // Check if other games are using the same prefix
+    let other_games_using_prefix = check_other_games_using_prefix(&dirs, prefix_path, &name)?;
+
+    if other_games_using_prefix.is_empty() && prefix_path.exists() {
+        // Prompt user to delete the prefix
+        if prompt_user_for_prefix_deletion(prefix_name)? {
+            if let Err(e) = fs::remove_dir_all(prefix_path) {
+                eprintln!("Warning: Failed to remove prefix '{}': {}", prefix_name, e);
+            } else {
+                println!("Successfully removed prefix: {}", prefix_name);
+            }
+        }
+    } else if !other_games_using_prefix.is_empty() {
+        println!("Note: Prefix '{}' is still being used by: {}", 
+                prefix_name, 
+                other_games_using_prefix.join(", "));
+    }
+
     println!("Successfully removed game: {name}");
 
     Ok(())
+}
+
+/// Check if other games are using the same prefix
+fn check_other_games_using_prefix(dirs: &CellarDirectories, prefix_path: &std::path::Path, current_game: &str) -> Result<Vec<String>> {
+    let mut games_using_prefix = Vec::new();
+    let config_dir = &dirs.configs_dir;
+    
+    if let Ok(entries) = fs::read_dir(config_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("toml") {
+                if let Some(game_name) = path.file_stem().and_then(|s| s.to_str()) {
+                    if game_name != current_game {
+                        if let Ok(config) = load_game_config(dirs, game_name) {
+                            if config.game.wine_prefix == prefix_path {
+                                games_using_prefix.push(game_name.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    Ok(games_using_prefix)
+}
+
+/// Prompt user for permission to delete a prefix
+fn prompt_user_for_prefix_deletion(prefix_name: &str) -> Result<bool> {
+    use std::io::{self, Write};
+
+    print!("Also delete wine prefix '{}'? [y/N]: ", prefix_name);
+    io::stdout().flush()?;
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    let input = input.trim().to_lowercase();
+
+    Ok(input == "y" || input == "yes")
 }
 
 pub fn show_game_info(name: String) -> Result<()> {
