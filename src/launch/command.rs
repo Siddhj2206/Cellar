@@ -143,13 +143,15 @@ impl CommandBuilder {
         &self,
         base_command: Vec<String>,
         _env_vars: &HashMap<String, String>,
-    ) -> Result<ProcessedCommand> {
+    ) -> Result<Vec<String>> {
         let launch_options = &self.config.launch.launch_options;
 
         if launch_options.is_empty() {
-            // No launch options, wrap with mangohud first, then gamescope if enabled
+            // No launch options, wrap with mangohud first, then gamescope, then gamemode
             let mangohud_wrapped = self.wrap_with_mangohud(base_command)?;
-            return self.wrap_with_gamescope(mangohud_wrapped);
+            let gamescope_wrapped = self.wrap_with_gamescope(mangohud_wrapped)?;
+            let gamemode_wrapped = self.wrap_with_gamemode(gamescope_wrapped)?;
+            return Ok(gamemode_wrapped);
         }
 
         // Parse launch options into tokens
@@ -178,9 +180,11 @@ impl CommandBuilder {
             final_command.extend_from_slice(&base_command);
         }
 
-        // Wrap with mangohud first, then gamescope if enabled
+        // Wrap with mangohud first, then gamescope, then gamemode
         let mangohud_wrapped = self.wrap_with_mangohud(final_command)?;
-        self.wrap_with_gamescope(mangohud_wrapped)
+        let gamescope_wrapped = self.wrap_with_gamescope(mangohud_wrapped)?;
+        let gamemode_wrapped = self.wrap_with_gamemode(gamescope_wrapped)?;
+        Ok(gamemode_wrapped)
     }
 
     /// Parse launch options string into tokens, handling quotes and environment variables safely
@@ -310,9 +314,9 @@ impl CommandBuilder {
     }
 
     /// Wrap command with gamescope if enabled
-    fn wrap_with_gamescope(&self, command: Vec<String>) -> Result<ProcessedCommand> {
+    fn wrap_with_gamescope(&self, command: Vec<String>) -> Result<Vec<String>> {
         if !self.config.gamescope.enabled {
-            return Ok(ProcessedCommand::Direct(command));
+            return Ok(command);
         }
 
         let gamescope_config = &self.config.gamescope;
@@ -397,44 +401,27 @@ impl CommandBuilder {
         gamescope_cmd.push("--".to_string());
         gamescope_cmd.extend(command);
 
-        Ok(ProcessedCommand::Gamescope(gamescope_cmd))
+        Ok(gamescope_cmd)
+    }
+
+    /// Wrap command with gamemode if enabled
+    fn wrap_with_gamemode(&self, command: Vec<String>) -> Result<Vec<String>> {
+        if !self.config.launch.gamemode {
+            return Ok(command);
+        }
+
+        let mut gamemode_cmd = vec!["gamemoderun".to_string()];
+        gamemode_cmd.extend(command);
+        Ok(gamemode_cmd)
     }
 }
 
 /// Represents the final launch command with all components
 #[derive(Debug, Clone)]
 pub struct LaunchCommand {
-    pub command: ProcessedCommand,
+    pub command: Vec<String>,
     pub environment: HashMap<String, String>,
     pub working_directory: PathBuf,
 }
 
-/// Represents a processed command that may be wrapped with gamescope
-#[derive(Debug, Clone)]
-pub enum ProcessedCommand {
-    Direct(Vec<String>),
-    Gamescope(Vec<String>),
-}
 
-impl ProcessedCommand {
-    pub fn as_args(&self) -> &[String] {
-        match self {
-            ProcessedCommand::Direct(args) => args,
-            ProcessedCommand::Gamescope(args) => args,
-        }
-    }
-
-    pub fn program(&self) -> &str {
-        match self {
-            ProcessedCommand::Direct(args) => &args[0],
-            ProcessedCommand::Gamescope(args) => &args[0],
-        }
-    }
-
-    pub fn args(&self) -> &[String] {
-        match self {
-            ProcessedCommand::Direct(args) => &args[1..],
-            ProcessedCommand::Gamescope(args) => &args[1..],
-        }
-    }
-}

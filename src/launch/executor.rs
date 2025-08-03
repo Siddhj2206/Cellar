@@ -107,7 +107,7 @@ impl GameLauncher {
 
     /// Execute the launch command with proper environment and error handling
     async fn execute_launch_command(&self, launch_command: &LaunchCommand) -> Result<()> {
-        let args = launch_command.command.as_args();
+        let args = &launch_command.command;
 
         // Check if the first argument looks like an environment variable assignment
         let needs_shell = args.first().map(|arg| arg.contains('=')).unwrap_or(false);
@@ -123,8 +123,9 @@ impl GameLauncher {
 
     /// Execute command directly without shell
     async fn execute_direct_command(&self, launch_command: &LaunchCommand) -> Result<()> {
-        let program = launch_command.command.program();
-        let cmd_args = launch_command.command.args();
+        let command = &launch_command.command;
+        let program = &command[0];
+        let cmd_args = &command[1..];
 
         println!("Executing command:");
         println!("  Program: {program}");
@@ -151,7 +152,7 @@ impl GameLauncher {
 
     /// Execute command through shell for complex command lines
     async fn execute_shell_command(&self, launch_command: &LaunchCommand) -> Result<()> {
-        let args = launch_command.command.as_args();
+        let args = &launch_command.command;
         let command_line = self.shell_quote_command(args);
 
         println!("Executing shell command:");

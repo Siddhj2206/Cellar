@@ -35,6 +35,8 @@ pub struct LaunchConfig {
     pub launch_options: String,
     #[serde(default)]
     pub game_args: Vec<String>,
+    #[serde(default)]
+    pub gamemode: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
