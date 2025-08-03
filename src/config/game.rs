@@ -100,10 +100,6 @@ pub struct MangohudConfig {
 pub struct DesktopConfig {
     #[serde(default = "default_true")]
     pub create_shortcut: bool,
-    #[serde(default = "default_true")]
-    pub create_symlink: bool,
-    #[serde(default)]
-    pub install_system: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub icon_path: Option<PathBuf>,
     #[serde(default = "default_categories")]
@@ -112,8 +108,6 @@ pub struct DesktopConfig {
     pub keywords: Vec<String>,
     #[serde(default = "default_comment")]
     pub comment: String,
-    #[serde(default = "default_true")]
-    pub prefix_name: bool,
 }
 
 
@@ -207,13 +201,10 @@ impl Default for DesktopConfig {
     fn default() -> Self {
         Self {
             create_shortcut: true,
-            create_symlink: true,
-            install_system: false,
             icon_path: None,
             categories: vec!["Game".to_string()],
             keywords: vec!["game".to_string(), "windows".to_string()],
             comment: "Windows game via Cellar".to_string(),
-            prefix_name: true,
         }
     }
 }

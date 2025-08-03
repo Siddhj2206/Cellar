@@ -7,6 +7,7 @@ use crate::config::game::{
     DesktopConfig, GameConfig, GameInfo, GamescopeConfig, LaunchConfig, MangohudConfig, WineConfig,
 };
 use crate::config::validation::validate_game_config;
+use crate::desktop;
 use crate::runners::dxvk::DxvkManager;
 use crate::runners::proton::ProtonManager;
 use crate::runners::{RunnerCache, RunnerManager, RunnerType};
@@ -65,6 +66,11 @@ pub enum Commands {
     Prefix {
         #[command(subcommand)]
         command: PrefixCommands,
+    },
+    /// Desktop shortcut management commands
+    Shortcut {
+        #[command(subcommand)]
+        command: ShortcutCommands,
     },
 }
 
@@ -128,6 +134,24 @@ pub enum PrefixCommands {
     },
 }
 
+#[derive(Subcommand)]
+pub enum ShortcutCommands {
+    /// Create desktop shortcut for a game
+    Create {
+        /// Name of the game
+        name: String,
+    },
+    /// Remove desktop shortcut for a game  
+    Remove {
+        /// Name of the game
+        name: String,
+    },
+    /// Sync all desktop shortcuts
+    Sync,
+    /// List all desktop shortcuts
+    List,
+}
+
 pub async fn add_game(
     name: String,
     exe: Option<String>,
@@ -167,6 +191,12 @@ pub async fn add_game(
         create_basic_game_config(&name, exe_path, &dirs, proton.as_deref(), prefix.as_deref())
             .await?;
     save_game_config(&dirs, &name, &config)?;
+
+    // Create desktop shortcut if enabled
+    let config_name = sanitize_filename(&name);
+    if let Err(e) = desktop::create_desktop_shortcut(&config, &config_name).await {
+        eprintln!("Warning: Failed to create desktop shortcut: {}", e);
+    }
 
     println!("Successfully added game: {name}");
     println!(
@@ -226,6 +256,11 @@ pub fn remove_game(name: String) -> Result<()> {
     }
 
     fs::remove_file(&config_path).map_err(|e| anyhow!("Failed to remove config file: {}", e))?;
+
+    // Remove desktop shortcut if it exists
+    if let Err(e) = desktop::remove_desktop_shortcut(&name) {
+        eprintln!("Warning: Failed to remove desktop shortcut: {}", e);
+    }
 
     println!("Successfully removed game: {name}");
 
@@ -1239,5 +1274,51 @@ async fn install_dxvk_to_prefix(version: &str, prefix_name: &str) -> Result<()> 
 
     println!("Successfully installed DXVK {version} to prefix '{prefix_name}'");
 
+    Ok(())
+}
+
+// Shortcut management functions
+pub async fn handle_shortcut_command(command: ShortcutCommands) -> Result<()> {
+    match command {
+        ShortcutCommands::Create { name } => create_shortcut(&name).await,
+        ShortcutCommands::Remove { name } => remove_shortcut(&name).await,
+        ShortcutCommands::Sync => sync_shortcuts().await,
+        ShortcutCommands::List => list_shortcuts().await,
+    }
+}
+
+async fn create_shortcut(game_name: &str) -> Result<()> {
+    let dirs = CellarDirectories::new()?;
+    let config = load_game_config(&dirs, game_name)?;
+    
+    // Use the sanitized game name (config filename) for the exec command
+    let config_name = sanitize_filename(game_name);
+    desktop::create_desktop_shortcut(&config, &config_name).await?;
+    
+    Ok(())
+}
+
+async fn remove_shortcut(game_name: &str) -> Result<()> {
+    desktop::remove_desktop_shortcut(game_name)?;
+    Ok(())
+}
+
+async fn sync_shortcuts() -> Result<()> {
+    desktop::sync_desktop_shortcuts().await?;
+    Ok(())
+}
+
+async fn list_shortcuts() -> Result<()> {
+    let shortcuts = desktop::list_desktop_shortcuts()?;
+    
+    if shortcuts.is_empty() {
+        println!("No desktop shortcuts found.");
+    } else {
+        println!("Desktop shortcuts:");
+        for shortcut in shortcuts {
+            println!("  {}", shortcut);
+        }
+    }
+    
     Ok(())
 }

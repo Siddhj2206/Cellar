@@ -3,6 +3,7 @@ use clap::Parser;
 
 mod cli;
 mod config;
+mod desktop;
 mod launch;
 mod runners;
 mod utils;
@@ -53,6 +54,9 @@ async fn main() -> Result<()> {
         }
         Commands::Prefix { command } => {
             cli::commands::handle_prefix_command(command).await?;
+        }
+        Commands::Shortcut { command } => {
+            cli::commands::handle_shortcut_command(command).await?;
         }
     }
 
