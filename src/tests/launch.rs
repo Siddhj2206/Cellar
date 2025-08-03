@@ -17,11 +17,11 @@ mod tests {
                 launch_options: "PROTON_ENABLE_WAYLAND=1 gamemoderun %command%".to_string(),
                 game_args: vec!["--windowed".to_string(), "--dx11".to_string()],
                 gamemode: false,
+                mangohud: false,
             },
             wine_config: WineConfig::default(),
             dxvk: DxvkConfig::default(),
             gamescope: GamescopeConfig::default(),
-            mangohud: MangohudConfig::default(),
             desktop: DesktopConfig::default(),
 
             installation: None,
@@ -96,7 +96,7 @@ mod tests {
         let mut config = create_test_config();
         config.launch.gamemode = true;
         config.launch.launch_options = "".to_string();
-        config.mangohud.enabled = true;
+        config.launch.mangohud = true;
 
         let builder = CommandBuilder::new(config)
             .with_proton_path(PathBuf::from("/path/to/proton"));
@@ -115,7 +115,7 @@ mod tests {
         let mut config = create_test_config();
         config.launch.gamemode = true;
         config.launch.launch_options = "".to_string();
-        config.mangohud.enabled = true;
+        config.launch.mangohud = true;
         config.gamescope.enabled = true;
 
         let builder = CommandBuilder::new(config)

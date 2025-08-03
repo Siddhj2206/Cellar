@@ -16,7 +16,7 @@ mod tests {
             wine_config: WineConfig::default(),
             dxvk: DxvkConfig::default(),
             gamescope: GamescopeConfig::default(),
-            mangohud: MangohudConfig::default(),
+
             desktop: DesktopConfig::default(),
 
             installation: None,
@@ -25,7 +25,7 @@ mod tests {
         assert_eq!(config.game.name, "Test Game");
         assert_eq!(config.game.proton_version, "GE-Proton8-32");
         assert!(config.wine_config.esync);
-        assert!(!config.mangohud.enabled);
+        assert!(!config.launch.mangohud);
         assert!(!config.gamescope.enabled);
     }
 
@@ -43,7 +43,7 @@ mod tests {
             wine_config: WineConfig::default(),
             dxvk: DxvkConfig::default(),
             gamescope: GamescopeConfig::default(),
-            mangohud: MangohudConfig::default(),
+
             desktop: DesktopConfig::default(),
 
             installation: None,

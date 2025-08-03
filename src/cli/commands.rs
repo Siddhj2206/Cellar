@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::config::game::{
-    DesktopConfig, GameConfig, GameInfo, GamescopeConfig, LaunchConfig, MangohudConfig, WineConfig,
+    DesktopConfig, GameConfig, GameInfo, GamescopeConfig, LaunchConfig, WineConfig,
 };
 use crate::config::validation::validate_game_config;
 use crate::desktop;
@@ -388,7 +388,6 @@ async fn create_basic_game_config(
         wine_config: WineConfig::default(),
         dxvk: Default::default(),
         gamescope: GamescopeConfig::default(),
-        mangohud: MangohudConfig::default(),
         desktop: DesktopConfig::default(),
         installation: None,
     };

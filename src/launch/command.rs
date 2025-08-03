@@ -304,7 +304,7 @@ impl CommandBuilder {
 
     /// Wrap command with mangohud if enabled (but not when gamescope is enabled)
     fn wrap_with_mangohud(&self, command: Vec<String>) -> Result<Vec<String>> {
-        if !self.config.mangohud.enabled || self.config.gamescope.enabled {
+        if !self.config.launch.mangohud || self.config.gamescope.enabled {
             return Ok(command);
         }
 
@@ -393,7 +393,7 @@ impl CommandBuilder {
         }
 
         // Add --mangoapp if mangohud is enabled
-        if self.config.mangohud.enabled {
+        if self.config.launch.mangohud {
             gamescope_cmd.push("--mangoapp".to_string());
         }
 

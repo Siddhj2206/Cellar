@@ -11,8 +11,6 @@ pub struct GameConfig {
     #[serde(default)]
     pub gamescope: GamescopeConfig,
     #[serde(default)]
-    pub mangohud: MangohudConfig,
-    #[serde(default)]
     pub desktop: DesktopConfig,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -37,6 +35,8 @@ pub struct LaunchConfig {
     pub game_args: Vec<String>,
     #[serde(default)]
     pub gamemode: bool,
+    #[serde(default)]
+    pub mangohud: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,12 +91,6 @@ pub struct GamescopeConfig {
     pub immediate_flips: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
-pub struct MangohudConfig {
-    #[serde(default)]
-    pub enabled: bool,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DesktopConfig {

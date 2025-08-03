@@ -18,7 +18,6 @@ mod tests {
             wine_config: crate::config::game::WineConfig::default(),
             dxvk: crate::config::game::DxvkConfig::default(),
             gamescope: crate::config::game::GamescopeConfig::default(),
-            mangohud: crate::config::game::MangohudConfig::default(),
             desktop: crate::config::game::DesktopConfig::default(),
 
             installation: None,
