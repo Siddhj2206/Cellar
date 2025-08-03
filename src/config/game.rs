@@ -27,11 +27,6 @@ pub struct GameInfo {
     pub proton_version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dxvk_version: Option<String>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub template: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub preset: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

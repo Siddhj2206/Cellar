@@ -13,8 +13,6 @@ mod tests {
                 wine_prefix: PathBuf::from("/tmp/prefix"),
                 proton_version: "GE-Proton8-32".to_string(),
                 dxvk_version: None,
-                template: None,
-                preset: None,
             },
             launch: crate::config::game::LaunchConfig::default(),
             wine_config: crate::config::game::WineConfig::default(),

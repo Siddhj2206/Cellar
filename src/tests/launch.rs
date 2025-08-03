@@ -12,8 +12,6 @@ mod tests {
                 wine_prefix: PathBuf::from("/path/to/prefix"),
                 proton_version: "GE-Proton8-32".to_string(),
                 dxvk_version: None,
-                template: None,
-                preset: None,
             },
             launch: LaunchConfig {
                 launch_options: "PROTON_ENABLE_WAYLAND=1 gamemoderun %command%".to_string(),

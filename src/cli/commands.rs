@@ -245,14 +245,6 @@ pub fn show_game_info(name: String) -> Result<()> {
         println!("  DXVK Version: {dxvk_version}");
     }
 
-    if let Some(template) = &config.game.template {
-        println!("  Template: {template}");
-    }
-
-    if let Some(preset) = &config.game.preset {
-        println!("  Preset: {preset}");
-    }
-
     println!("\nWine Configuration:");
     println!("  esync: {}", config.wine_config.esync);
     println!("  fsync: {}", config.wine_config.fsync);
@@ -349,8 +341,6 @@ async fn create_basic_game_config(
             wine_prefix,
             proton_version,
             dxvk_version: None,
-            template: None,
-            preset: None,
         },
         launch: LaunchConfig::default(),
         wine_config: WineConfig::default(),

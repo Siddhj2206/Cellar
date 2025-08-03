@@ -11,8 +11,6 @@ Cellar provides a Steam-like experience for managing Windows games on Linux thro
 - Interactive setup and configuration
 - Gamescope and MangoHUD integration
 - Desktop file generation with local symlinks
-- Wine configuration presets and game templates
-- Dependency management and system diagnostics
 - Per-game configuration files
 
 ## Project Structure
@@ -38,21 +36,10 @@ Cellar provides a Steam-like experience for managing Windows games on Linux thro
 ├── icons/              # Game icons
 │   ├── game1.png
 │   └── game2.ico
-├── shortcuts/          # Generated .desktop files (source)
-│   ├── game1.desktop
-│   └── game2.desktop
-├── templates/          # Game templates
-│   ├── fps-game.toml
-│   ├── strategy-game.toml
-│   └── rpg-game.toml
-└── presets/            # Wine configuration presets
-    ├── gaming.toml
-    ├── compatibility.toml
-    └── performance.toml
 
-./local/share/applications/  # Symlinked .desktop files
-├── cellar-game1.desktop -> ../cellar/shortcuts/game1.desktop
-└── cellar-game2.desktop -> ../cellar/shortcuts/game2.desktop
+./local/share/applications/  # .desktop files created directly here
+├── cellar-game1.desktop
+└── cellar-game2.desktop
 ```
 
 ### Core Components
@@ -64,12 +51,9 @@ Cellar provides a Steam-like experience for managing Windows games on Linux thro
 5. **Installation Workflow** - Manual installer support with prefix management
 6. **Interactive Setup** - User-friendly configuration wizards
 7. **Gamescope Integration** - Advanced display and scaling options
-8. **Desktop Integration** - .desktop file generation with local symlinks
+8. **Desktop Integration** - .desktop file generation
 9. **Temporary Execution** - Run executables in prefixes without full setup
-10. **Template System** - Pre-configured game type templates
-11. **Preset System** - Wine configuration presets for different scenarios
-12. **System Diagnostics** - Health checking and configuration validation
-13. **MangoHUD Integration** - Performance monitoring and overlay configuration
+10. **MangoHUD Integration** - Performance monitoring and overlay configuration
 
 ## Configuration Format
 
@@ -82,8 +66,6 @@ wine_prefix = "./local/share/cellar/prefixes/game_name"
 proton_version = "GE-Proton8-32"
 dxvk_version = "v2.3.1"  # Optional, uses bundled if not specified
 status = "configured"    # "configured", "installing", "installed", "incomplete"
-template = "fps-game"    # Template used for creation
-preset = "gaming"        # Wine configuration preset
 
 [launch]
 # Steam-style launch command with %command% placeholder
@@ -127,8 +109,6 @@ config_file = "~/.config/MangoHud/MangoHud.conf"  # Optional custom config
 
 [desktop]
 create_shortcut = true
-create_symlink = true              # Create symlink in local applications
-install_system = false             # Install to ~/.local/share/applications/
 icon_path = "/path/to/icon.ico"    # Optional, extracted from exe if not provided
 categories = ["Game"]
 keywords = ["game", "windows"]
@@ -243,10 +223,7 @@ cellar runners install-dxvk <version> <prefix> # Install DXVK into specific pref
 # Shortcut management
 cellar shortcut create <game-name>        # Create desktop shortcut
 cellar shortcut remove <game-name>        # Remove shortcut
-cellar shortcut link <game-name>          # Create symlink to local applications
-cellar shortcut unlink <game-name>        # Remove symlink only
 cellar shortcut sync                      # Sync all shortcuts
-cellar shortcut link-all                  # Symlink all games to local applications
 ```
 
 ### Temporary Execution
@@ -270,216 +247,6 @@ cellar repair <game-name>                 # Repair broken game config
 cellar fix <game-name>                    # Fix incomplete game setup
 ```
 
-### Template System
-```bash
-# Template management
-cellar template list                      # List available templates
-cellar template create fps-game           # Create new template
-cellar template edit fps-game             # Edit existing template
-cellar template show fps-game             # Show template configuration
-cellar add <game-name> --template fps-game
-```
-
-### Preset System
-```bash
-# Wine configuration presets
-cellar preset list                        # List available presets
-cellar preset create gaming               # Create new preset
-cellar preset edit gaming                 # Edit existing preset
-cellar preset apply gaming <game-name>    # Apply preset to game
-cellar config <game-name> --preset gaming
-```
-
-### MangoHUD Integration
-```bash
-# MangoHUD management
-cellar mangohud enable <game-name>        # Enable MangoHUD for game
-cellar mangohud disable <game-name>       # Disable MangoHUD for game
-cellar mangohud config <game-name>        # Configure MangoHUD settings
-cellar mangohud global-config             # Configure global MangoHUD
-```
-
-### System Diagnostics
-```bash
-# System health and diagnostics
-cellar doctor                             # Run comprehensive system health check
-cellar doctor <game-name>                 # Check specific game health
-cellar validate <game-name>               # Validate game configuration
-cellar validate --all                     # Validate all configurations
-cellar fix-permissions                    # Fix file permissions issues
-```
-
-### Interactive Setup Flow
-
-#### Main Game Addition (`cellar add -i`)
-```
-Cellar - Add New Game
-
-Game name: [My Game]
-
-Setup type:
-> Add existing game (I have the game installed)
-  Install new game (I have an installer)
-
---- If "Add existing game" ---
-Game executable: [Browse/Enter path]
-
---- If "Install new game" ---
-Installer executable: [Browse/Enter path]
-
-Template:
-> FPS Game (optimized for first-person shooters)
-  Strategy Game (optimized for strategy games)
-  RPG Game (optimized for RPGs)
-  Custom setup
-
-Wine Configuration:
-> Use preset: Gaming (recommended)
-  Use preset: Compatibility
-  Use preset: Performance
-  Custom configuration
-
-Select Proton version:
-> GE-Proton8-32 (installed)
-  GE-Proton9-1 (installed)
-  GE-Proton9-2 (available for download)
-
-Select DXVK version:
-> Use bundled DXVK
-  v2.3.1 (installed)
-  v2.4 (available for download)
-
-Performance Monitoring:
-> [x] Enable MangoHUD
-  [x] Enable GameMode (auto-detected)
-
-Gamescope Configuration:
-> [ ] Enable gamescope
-
-Desktop Integration:
-> [x] Create application shortcut
-  [x] Install to local applications menu
-
-Launch options (Steam-style):
-[PROTON_ENABLE_WAYLAND=1 gamemoderun %command%]
-
-Game arguments:
-[--windowed --dx11]
-
-Wine prefix:
-> Create new prefix: ./local/share/cellar/prefixes/my_game
-  Use existing prefix: [Browse]
-```
-
-Game arguments:
-[--windowed --dx11]
-
-Wine prefix:
-> Create new prefix: ./local/share/cellar/prefixes/my_game
-  Use existing prefix: [Browse]
-```
-
-#### Installation Workflow (if installer selected)
-```
-Ready to install? This will:
-1. Create wine prefix at: ./local/share/cellar/prefixes/my_game
-2. Launch installer: /path/to/installer.exe
-3. Wait for you to complete installation manually
-4. Configure game executable
-
-Continue? [Y/n]
-
-Creating prefix...
-Launching installer...
-
-Complete the installation manually, then press enter to continue...
-
-Installation completed!
-Scanning for executables...
-
-Found executables:
-> C:\Program Files\My Game\game.exe
-  C:\Program Files\My Game\launcher.exe
-  Browse for different executable
-
-Game "My Game" configured successfully!
-Desktop shortcut created and linked to local applications.
-```
-
-#### Gamescope Configuration (if enabled)
-```
-Gamescope Configuration:
-Resolution: [1920x1080]
-Refresh rate: [60] Hz
-
-Upscaling:
-> FSR
-  NIS
-  Linear
-  Nearest
-  Off
-
-Display options:
-> [x] Fullscreen
-  [ ] Borderless
-  [x] Steam integration
-  [ ] Force grab cursor
-  [ ] HDR support
-  [ ] Adaptive sync
-  [ ] Immediate flips
-```
-
-## Template and Preset System
-
-### Game Templates
-```toml
-# fps-game.toml template
-[wine_config]
-esync = true
-fsync = true
-dxvk = true
-dxvk_async = true
-large_address_aware = true
-
-[gamescope]
-enabled = false
-width = 1920
-height = 1080
-refresh_rate = 144
-upscaling = "fsr"
-
-[mangohud]
-enabled = true
-fps = true
-gpu_stats = true
-frame_timing = true
-```
-
-### Wine Configuration Presets
-```toml
-# gaming.toml preset
-[wine_config]
-esync = true
-fsync = true
-dxvk = true
-dxvk_async = true
-
-# compatibility.toml preset
-[wine_config]
-esync = false
-fsync = false
-dxvk = false
-large_address_aware = true
-
-# performance.toml preset
-[wine_config]
-esync = true
-fsync = true
-dxvk = true
-dxvk_async = false  # For stability
-large_address_aware = true
-```
-
 ## Usage Examples
 
 ### Simple Game Addition
@@ -496,49 +263,12 @@ cellar add "Cyberpunk 2077"
 # Option A: All-in-one installation
 cellar add "Witcher 3" --installer "/path/to/setup.exe"
 
-# Option B: Separate steps
-cellar add "Witcher 3" --install
-cellar installer "Witcher 3" "/path/to/setup.exe"
-cellar setup "Witcher 3" --exe "/path/to/witcher3.exe"
-
-# Option C: Interactive
+# Option B: Interactive
 cellar add "Witcher 3"
 # Select "Install new game" in interactive mode
 ```
 
-### Template and Preset Usage
-```bash
-# Using templates
-cellar add "Counter-Strike 2" --template fps-game
-cellar template apply fps-game "existing-game"
-
-# Using presets
-cellar add "Old Game" --preset compatibility
-cellar preset apply gaming "Cyberpunk 2077"
-```
-
-### MangoHUD Integration
-```bash
-# Enable MangoHUD with default settings
-cellar mangohud enable "Cyberpunk 2077"
-
-# Configure MangoHUD settings
-cellar config "Cyberpunk 2077" mangohud.fps=true mangohud.gpu_stats=true
-```
-
-### System Diagnostics
-```bash
-# Run system health check
-cellar doctor
-
-# Check specific game
-cellar doctor "Cyberpunk 2077"
-
-# Validate all configurations
-cellar validate --all
-```
-
-## Implementation Status
+### Interactive Setup Flow
 
 ### ✅ Phase 1: Core Infrastructure (COMPLETED)
 1. **Project Setup** - ✅ DONE
@@ -596,13 +326,12 @@ cellar validate --all
 9. **Manual Installation Workflow**
    - Basic installer support planned but not fully implemented
    - Need to implement `cellar install` to run installers within a prefix
-   - Need desktop shortcut and symlink creation
+   - Need desktop shortcut creation
    - Need post-installation executable detection and scanning
 
 10. **Desktop Integration** - ❌ NOT STARTED
     - .desktop file generation not implemented
     - Icon extraction from executables not implemented
-    - Local symlink management to ./local/share/applications not implemented
 
 11. **Interactive Setup** - ❌ NOT STARTED
     - User-friendly setup wizards not implemented
@@ -616,46 +345,24 @@ cellar validate --all
     - Resolution and scaling configuration not implemented
     - Display option management not implemented
 
-13. **MangoHUD Integration** - 🔄 PARTIAL
+12. **MangoHUD Integration** - 🔄 PARTIAL
     - MangoHUD configuration structure exists in config
-    - Configuration management not implemented
-    - Performance overlay settings not implemented
-    - Custom MangoHUD config support not implemented
+    - MangoHUD integration using 'mangohud' command wrapper implemented
+    - Configuration is managed through game config files
 
-### ❌ Phase 6: Template and Preset Systems (NOT STARTED)
-14. **Template System** - ❌ NOT STARTED
-    - Pre-configured game type templates not implemented
-    - Template creation and editing not implemented
-    - Template application to games not implemented
-
-15. **Preset System** - ❌ NOT STARTED
-    - Wine configuration presets not implemented
-    - Preset creation and management not implemented
-    - Easy preset application not implemented
-
-### ❌ Phase 7: Utilities and Diagnostics (NOT STARTED)
-16. **Temporary Execution** - ❌ NOT STARTED
+### ❌ Phase 6: Utilities (NOT STARTED)
+13. **Temporary Execution** - ❌ NOT STARTED
     - Prefix-based temporary execution not implemented
     - Utility command shortcuts (winetricks, winecfg, etc.) not implemented
     - Temporary prefix management not implemented
 
-17. **System Diagnostics** - ❌ NOT STARTED
-    - Comprehensive system health checking not implemented
-    - Configuration validation and repair not implemented
-    - Dependency verification not implemented
-
-18. **Dependency Management** - ❌ NOT STARTED
-    - Windows dependency detection and installation not implemented
-    - Visual C++ Redistributables, .NET Framework, DirectX support not implemented
-    - Per-game dependency tracking not implemented
-
-### ❌ Phase 8: Polish and Testing (PARTIALLY IMPLEMENTED)
-19. **Error Handling and Validation** - 🔄 PARTIAL
+### ❌ Phase 7: Polish and Testing (PARTIALLY IMPLEMENTED)
+14. **Error Handling and Validation** - 🔄 PARTIAL
     - Basic error handling with anyhow implemented
     - Configuration validation partially implemented
-    - Need comprehensive error messages and dependency checking
+    - Need comprehensive error messages
 
-20. **Testing and Documentation** - 🔄 PARTIAL
+16. **Testing and Documentation** - 🔄 PARTIAL
     - Test modules exist but may not be comprehensive
     - User documentation exists in plan.md
     - Need more example configurations and integration tests
@@ -709,21 +416,12 @@ cellar config <game-name> <key>=<value>   # Quick config changes
 # Desktop Integration
 cellar shortcut create <game-name>        # Create desktop shortcut
 cellar shortcut remove <game-name>        # Remove shortcut
-cellar shortcut link <game-name>          # Create symlink to local applications
 cellar shortcut sync                      # Sync all shortcuts
 
-# Template and Preset System
-cellar template list/create/edit/apply    # Template management
-cellar preset list/create/edit/apply      # Preset management
-
-# Utilities and Diagnostics
+# Utilities
 cellar exec <prefix> <executable>         # Temporary execution
 cellar winetricks/winecfg/regedit <prefix> # Utility shortcuts
-cellar clean/check/repair/fix             # Maintenance commands
-cellar doctor/validate                    # System diagnostics
-
-# Integration
-cellar mangohud enable/disable/config     # MangoHUD management
+cellar clean                              # Cleanup temp files
 
 cellar add <game-name> --installer <path> # Add game with installer workflow
 ```
@@ -784,16 +482,13 @@ cellar add <game-name> --installer <path> # Add game with installer workflow
 
 **High Priority (Essential Features Missing):**
 1. **Interactive Setup Implementation** - Critical for user experience
-2. **Desktop Integration** - .desktop file generation and symlink management
+2. **Desktop Integration** - .desktop file generation
 3. **Manual Installation Workflow** - **COMPLETED** - Complete installer execution and post-install setup
 4. ✅ **GameScope Command Construction** - **COMPLETED** - Implement actual gamescope execution
 5. ✅ **MangoHUD Environment Setup** - **COMPLETED** - Complete MangoHUD integration
 
 **Medium Priority (Quality of Life):**
-1. **Template and Preset Systems** - For easier game configuration
-2. **Configuration Management Commands** - Interactive config editing
-3. **System Diagnostics** - Health checking and validation
-4. **Dependency Management** - Windows dependency installation
+1. **Configuration Management Commands** - Interactive config editing
 
 **Low Priority (Polish and Advanced Features):**
 1. **Temporary Execution Utilities** - winetricks, winecfg shortcuts
@@ -816,7 +511,6 @@ Target: 2-3 weeks
 2. Desktop Integration
    - .desktop file generation with proper categories and metadata
    - Icon extraction from executables or default icons
-   - Symlink management to ~/.local/share/applications/
 
 3. Manual Installation Workflow - **COMPLETED**
    - Installer execution within prefixes using existing CommandBuilder infrastructure
@@ -841,22 +535,15 @@ Target: 2-3 weeks
 # Focus: Improve user experience and workflow efficiency
 Target: 3-4 weeks
 
-1. Template and Preset Systems
-   - Game type templates (FPS, Strategy, RPG, etc.)
-   - Wine configuration presets (Gaming, Compatibility, Performance)
-   - Template creation, editing, and application
-
-2. System Diagnostics and Maintenance
-   - Health checking for games, prefixes, and runners
-   - Configuration validation and automatic repair
+1. System Maintenance
    - Cleanup utilities for temporary files and broken links
 
-3. Enhanced Installation Workflow
+2. Enhanced Installation Workflow
    - Executable scanning and selection after installation
    - Installation status tracking and recovery
    - Better installer progress monitoring
 
-4. Improved CLI Experience
+3. Improved CLI Experience
    - Better help messages and examples
    - Progress indicators for long-running operations
    - More intuitive command organization
@@ -963,8 +650,6 @@ src/
 ├── config/                 # Configuration management
 │   ├── mod.rs
 │   ├── game.rs            # Game configuration
-│   ├── template.rs        # Template system
-│   ├── preset.rs          # Preset system
 │   └── validation.rs      # Config validation
 ├── runners/               # Runner management
 │   ├── mod.rs
@@ -985,10 +670,6 @@ src/
 ├── install/               # Installation workflow
 │   ├── mod.rs
 │   └── installer.rs       # Manual installer support
-├── diagnostics/           # System diagnostics
-│   ├── mod.rs
-│   ├── doctor.rs          # Health checking
-│   └── validator.rs       # Configuration validation
 └── utils/                 # Utility functions
     ├── mod.rs
     ├── download.rs        # Download utilities
@@ -1004,12 +685,10 @@ src/
    - Launch games through umu-launcher with custom configurations
    - Support Steam-style launch commands with `%command%`
    - Handle manual game installation workflow
-   - Generate desktop shortcuts with local symlinks
+   - Generate desktop shortcuts
    - Interactive setup and configuration editing
    - Temporary execution of utilities in prefixes
-   - Template and preset system for easy game configuration
    - MangoHUD integration for performance monitoring
-   - System diagnostics and configuration validation
 
 2. **Quality Requirements**
    - Comprehensive error handling and user feedback
@@ -1022,8 +701,6 @@ src/
    - Simple game setup process with clear workflows
    - Manual installer support with guided process
    - Desktop integration with application menu shortcuts
-   - Template-based setup for common game types
-   - Preset-based wine configuration for different scenarios
    - Clear status messages and progress indicators
    - Flexible configuration options
    - Reliable game launching with gamescope and MangoHUD support
@@ -1031,10 +708,8 @@ src/
 4. **Technical Requirements**
    - Local runner management
    - Portable project structure
-   - Efficient symlink management for shortcuts
+   - Efficient shortcut management
    - Support for both existing games and new installations
    - Temporary prefix execution for utilities
-   - Template and preset management systems
-   - System health monitoring and validation
 
-This plan provides a comprehensive roadmap for implementing all requested features while maintaining good software engineering practices and user experience. The redesigned CLI interface makes the tool more intuitive and supports both simple game addition and complex installation workflows, with advanced features like templates, presets, dependency management, and system diagnostics.
+This plan provides a comprehensive roadmap for implementing all requested features while maintaining good software engineering practices and user experience. The redesigned CLI interface makes the tool more intuitive and supports both simple game addition and complex installation workflows.

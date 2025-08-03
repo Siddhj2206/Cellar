@@ -11,9 +11,6 @@ mod tests {
                 wine_prefix: std::path::PathBuf::from("/path/to/prefix"),
                 proton_version: "GE-Proton8-32".to_string(),
                 dxvk_version: None,
-
-                template: None,
-                preset: None,
             },
             launch: LaunchConfig::default(),
             wine_config: WineConfig::default(),
@@ -41,9 +38,6 @@ mod tests {
                 wine_prefix: std::path::PathBuf::from("/path/to/prefix"),
                 proton_version: "GE-Proton8-32".to_string(),
                 dxvk_version: None,
-
-                template: None,
-                preset: None,
             },
             launch: LaunchConfig::default(),
             wine_config: WineConfig::default(),

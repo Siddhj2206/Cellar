@@ -26,9 +26,6 @@ pub struct CellarDirectories {
     pub prefixes_dir: PathBuf,
     pub configs_dir: PathBuf,
     pub icons_dir: PathBuf,
-    pub shortcuts_dir: PathBuf,
-    pub templates_dir: PathBuf,
-    pub presets_dir: PathBuf,
     pub applications_dir: PathBuf,
     pub cache_dir: PathBuf,
 }
@@ -47,9 +44,6 @@ impl CellarDirectories {
             prefixes_dir: base_dir.join("prefixes"),
             configs_dir: base_dir.join("configs"),
             icons_dir: base_dir.join("icons"),
-            shortcuts_dir: base_dir.join("shortcuts"),
-            templates_dir: base_dir.join("templates"),
-            presets_dir: base_dir.join("presets"),
             base_dir,
             applications_dir,
             cache_dir,
@@ -64,9 +58,6 @@ impl CellarDirectories {
         self.ensure_dir_exists(&self.prefixes_dir)?;
         self.ensure_dir_exists(&self.configs_dir)?;
         self.ensure_dir_exists(&self.icons_dir)?;
-        self.ensure_dir_exists(&self.shortcuts_dir)?;
-        self.ensure_dir_exists(&self.templates_dir)?;
-        self.ensure_dir_exists(&self.presets_dir)?;
         self.ensure_dir_exists(&self.applications_dir)?;
         self.ensure_dir_exists(&self.cache_dir)?;
 
@@ -102,12 +93,6 @@ impl CellarDirectories {
 
     #[allow(dead_code)]
     pub fn get_game_shortcut_path(&self, game_name: &str) -> PathBuf {
-        self.shortcuts_dir
-            .join(format!("{}.desktop", sanitize_filename(game_name)))
-    }
-
-    #[allow(dead_code)]
-    pub fn get_symlink_path(&self, game_name: &str) -> PathBuf {
         self.applications_dir
             .join(format!("cellar-{}.desktop", sanitize_filename(game_name)))
     }
