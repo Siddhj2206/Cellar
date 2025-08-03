@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use std::fs;
 
 use crate::config::game::GameConfig;
+use crate::desktop::icon::{get_or_extract_icon, remove_game_icons};
 use crate::utils::fs::CellarDirectories;
 
 /// Get the full path to the cellar binary using 'which cellar'
@@ -30,12 +31,17 @@ pub async fn generate_desktop_file(config: &GameConfig, config_name: &str) -> Re
     let cellar_path = get_cellar_binary_path().await?;
     let exec_command = format!("{} launch {}", cellar_path, config_name);
     
-    let icon = config
-        .desktop
-        .icon_path
-        .as_ref()
-        .and_then(|p| p.to_str())
-        .unwrap_or("application-x-ms-dos-executable");
+    // Determine icon path - try to extract from executable if not explicitly set
+    let icon = if let Some(icon_path) = &config.desktop.icon_path {
+        // Use explicitly set icon path
+        icon_path.to_string_lossy().to_string()
+    } else {
+        // Try to extract icon from executable
+        match get_or_extract_icon(&config.game.executable, &config.game.name).await {
+            Ok(Some(extracted_icon)) => extracted_icon.to_string_lossy().to_string(),
+            Ok(None) | Err(_) => "application-x-ms-dos-executable".to_string(),
+        }
+    };
     
     let categories = config.desktop.categories.join(";");
     let keywords = config.desktop.keywords.join(";");
@@ -90,6 +96,11 @@ pub fn remove_desktop_shortcut(game_name: &str) -> Result<()> {
         println!("Removed desktop shortcut: {}", shortcut_path.display());
     } else {
         println!("Desktop shortcut not found: {}", shortcut_path.display());
+    }
+    
+    // Also remove extracted icons
+    if let Err(e) = remove_game_icons(game_name) {
+        eprintln!("Warning: Failed to remove icons for {}: {}", game_name, e);
     }
     
     Ok(())

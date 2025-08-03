@@ -150,6 +150,13 @@ pub enum ShortcutCommands {
     Sync,
     /// List all desktop shortcuts
     List,
+    /// Extract icon from game executable
+    ExtractIcon {
+        /// Name of the game
+        name: String,
+    },
+    /// List all extracted icons
+    ListIcons,
 }
 
 pub async fn add_game(
@@ -1284,6 +1291,8 @@ pub async fn handle_shortcut_command(command: ShortcutCommands) -> Result<()> {
         ShortcutCommands::Remove { name } => remove_shortcut(&name).await,
         ShortcutCommands::Sync => sync_shortcuts().await,
         ShortcutCommands::List => list_shortcuts().await,
+        ShortcutCommands::ExtractIcon { name } => extract_icon(&name).await,
+        ShortcutCommands::ListIcons => list_icons().await,
     }
 }
 
@@ -1317,6 +1326,40 @@ async fn list_shortcuts() -> Result<()> {
         println!("Desktop shortcuts:");
         for shortcut in shortcuts {
             println!("  {}", shortcut);
+        }
+    }
+    
+    Ok(())
+}
+
+async fn extract_icon(game_name: &str) -> Result<()> {
+    let dirs = CellarDirectories::new()?;
+    let config = load_game_config(&dirs, game_name)?;
+    
+    match desktop::get_or_extract_icon(&config.game.executable, &config.game.name).await {
+        Ok(Some(icon_path)) => {
+            println!("Successfully extracted icon for {} to {}", game_name, icon_path.display());
+        }
+        Ok(None) => {
+            println!("No icon could be extracted from {}", config.game.executable.display());
+        }
+        Err(e) => {
+            return Err(anyhow::anyhow!("Failed to extract icon: {}", e));
+        }
+    }
+    
+    Ok(())
+}
+
+async fn list_icons() -> Result<()> {
+    let icons = desktop::list_game_icons()?;
+    
+    if icons.is_empty() {
+        println!("No extracted icons found.");
+    } else {
+        println!("Extracted icons:");
+        for icon in icons {
+            println!("  {}", icon);
         }
     }
     
