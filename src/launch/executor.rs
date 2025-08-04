@@ -107,7 +107,7 @@ impl GameLauncher {
 
     /// Execute the launch command with proper environment and error handling
     async fn execute_launch_command(&self, launch_command: &LaunchCommand) -> Result<()> {
-        let args = launch_command.command.as_args();
+        let args = &launch_command.command;
 
         // Check if the first argument looks like an environment variable assignment
         let needs_shell = args.first().map(|arg| arg.contains('=')).unwrap_or(false);
@@ -123,11 +123,12 @@ impl GameLauncher {
 
     /// Execute command directly without shell
     async fn execute_direct_command(&self, launch_command: &LaunchCommand) -> Result<()> {
-        let program = launch_command.command.program();
-        let cmd_args = launch_command.command.args();
+        let command = &launch_command.command;
+        let program = &command[0];
+        let cmd_args = &command[1..];
 
         println!("Executing command:");
-        println!("  Program: {}", program);
+        println!("  Program: {program}");
         if !cmd_args.is_empty() {
             println!("  Arguments: {}", cmd_args.join(" "));
         }
@@ -151,11 +152,11 @@ impl GameLauncher {
 
     /// Execute command through shell for complex command lines
     async fn execute_shell_command(&self, launch_command: &LaunchCommand) -> Result<()> {
-        let args = launch_command.command.as_args();
+        let args = &launch_command.command;
         let command_line = self.shell_quote_command(args);
 
         println!("Executing shell command:");
-        println!("  Command: {}", command_line);
+        println!("  Command: {command_line}");
 
         // Print environment variables that are game-specific (filter out system ones)
         self.print_environment_variables(&launch_command.environment);
@@ -183,7 +184,6 @@ impl GameLauncher {
                 key.starts_with("WINE")
                     || key.starts_with("PROTON")
                     || key.starts_with("DXVK")
-                    || key.starts_with("MANGOHUD")
                     || key.starts_with("GAMEID")
                     || key.starts_with("HOST_LC_ALL")
             })
@@ -192,7 +192,7 @@ impl GameLauncher {
         if !interesting_env_vars.is_empty() {
             println!("  Environment variables:");
             for (key, value) in interesting_env_vars {
-                println!("    {}={}", key, value);
+                println!("    {key}={value}");
             }
         }
     }

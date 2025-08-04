@@ -4,9 +4,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::config::game::{
-    DesktopConfig, GameConfig, GameInfo, GamescopeConfig, LaunchConfig, MangohudConfig, WineConfig,
+    DesktopConfig, GameConfig, GameInfo, GamescopeConfig, LaunchConfig, WineConfig,
 };
 use crate::config::validation::validate_game_config;
+use crate::desktop;
 use crate::runners::dxvk::DxvkManager;
 use crate::runners::proton::ProtonManager;
 use crate::runners::{RunnerCache, RunnerManager, RunnerType};
@@ -51,11 +52,6 @@ pub enum Commands {
         /// Name of the game
         name: String,
     },
-    /// Show game status
-    Status {
-        /// Name of the game (optional, shows all if not provided)
-        name: Option<String>,
-    },
     /// Runner management commands
     Runners {
         #[command(subcommand)]
@@ -65,6 +61,11 @@ pub enum Commands {
     Prefix {
         #[command(subcommand)]
         command: PrefixCommands,
+    },
+    /// Desktop shortcut management commands
+    Shortcut {
+        #[command(subcommand)]
+        command: ShortcutCommands,
     },
 }
 
@@ -128,6 +129,31 @@ pub enum PrefixCommands {
     },
 }
 
+#[derive(Subcommand)]
+pub enum ShortcutCommands {
+    /// Create desktop shortcut for a game
+    Create {
+        /// Name of the game
+        name: String,
+    },
+    /// Remove desktop shortcut for a game  
+    Remove {
+        /// Name of the game
+        name: String,
+    },
+    /// Sync all desktop shortcuts
+    Sync,
+    /// List all desktop shortcuts
+    List,
+    /// Extract icon from game executable
+    ExtractIcon {
+        /// Name of the game
+        name: String,
+    },
+    /// List all extracted icons
+    ListIcons,
+}
+
 pub async fn add_game(
     name: String,
     exe: Option<String>,
@@ -168,6 +194,12 @@ pub async fn add_game(
             .await?;
     save_game_config(&dirs, &name, &config)?;
 
+    // Create desktop shortcut if enabled
+    let config_name = sanitize_filename(&name);
+    if let Err(e) = desktop::create_desktop_shortcut(&config, &config_name).await {
+        eprintln!("Warning: Failed to create desktop shortcut: {}", e);
+    }
+
     println!("Successfully added game: {name}");
     println!(
         "  Config saved to: {}",
@@ -182,25 +214,34 @@ pub async fn launch_game(name: String) -> Result<()> {
     launcher.launch_game_by_name(&name).await
 }
 
-pub fn list_games() -> Result<()> {
+pub fn list_games(name: Option<String>) -> Result<()> {
     let dirs = CellarDirectories::new()?;
-    let games = dirs.list_game_configs()?;
 
-    if games.is_empty() {
-        println!("No games configured.");
-        return Ok(());
-    }
+    match name {
+        Some(game_name) => {
+            let config = load_game_config(&dirs, &game_name)?;
+            println!("Game: {}", config.game.name);
+        }
+        None => {
+            let games = dirs.list_game_configs()?;
 
-    println!("Configured games:");
-    for game_name in games {
-        match load_game_config(&dirs, &game_name) {
-            Ok(config) => {
-                println!("  {} [{}]", config.game.name, config.game.status);
-                println!("    Executable: {}", config.game.executable.display());
-                println!("    Proton: {}", config.game.proton_version);
+            if games.is_empty() {
+                println!("No games configured.");
+                return Ok(());
             }
-            Err(_) => {
-                println!("  {game_name} [error loading config]");
+
+            println!("Configured games:");
+            for game_name in &games {
+                match load_game_config(&dirs, game_name) {
+                    Ok(config) => {
+                        println!("  {}", config.game.name);
+                        println!("    Executable: {}", config.game.executable.display());
+                        println!("    Proton: {}", config.game.proton_version);
+                    }
+                    Err(_) => {
+                        println!("  {game_name} [error loading config]");
+                    }
+                }
             }
         }
     }
@@ -216,11 +257,88 @@ pub fn remove_game(name: String) -> Result<()> {
         return Err(anyhow!("Game '{}' not found", name));
     }
 
+    // Load the config to get the prefix path
+    let config = load_game_config(&dirs, &name)?;
+    let prefix_path = &config.game.wine_prefix;
+    let prefix_name = prefix_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown");
+
+    // Remove the game config file
     fs::remove_file(&config_path).map_err(|e| anyhow!("Failed to remove config file: {}", e))?;
+
+    // Remove desktop shortcut if it exists
+    if let Err(e) = desktop::remove_desktop_shortcut(&name) {
+        eprintln!("Warning: Failed to remove desktop shortcut: {}", e);
+    }
+
+    // Check if other games are using the same prefix
+    let other_games_using_prefix = check_other_games_using_prefix(&dirs, prefix_path, &name)?;
+
+    if other_games_using_prefix.is_empty() && prefix_path.exists() {
+        // Prompt user to delete the prefix
+        if prompt_user_for_prefix_deletion(prefix_name)? {
+            if let Err(e) = fs::remove_dir_all(prefix_path) {
+                eprintln!("Warning: Failed to remove prefix '{}': {}", prefix_name, e);
+            } else {
+                println!("Successfully removed prefix: {}", prefix_name);
+            }
+        }
+    } else if !other_games_using_prefix.is_empty() {
+        println!(
+            "Note: Prefix '{}' is still being used by: {}",
+            prefix_name,
+            other_games_using_prefix.join(", ")
+        );
+    }
 
     println!("Successfully removed game: {name}");
 
     Ok(())
+}
+
+/// Check if other games are using the same prefix
+fn check_other_games_using_prefix(
+    dirs: &CellarDirectories,
+    prefix_path: &std::path::Path,
+    current_game: &str,
+) -> Result<Vec<String>> {
+    let mut games_using_prefix = Vec::new();
+    let config_dir = &dirs.configs_dir;
+
+    if let Ok(entries) = fs::read_dir(config_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("toml") {
+                if let Some(game_name) = path.file_stem().and_then(|s| s.to_str()) {
+                    if game_name != current_game {
+                        if let Ok(config) = load_game_config(dirs, game_name) {
+                            if config.game.wine_prefix == prefix_path {
+                                games_using_prefix.push(game_name.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(games_using_prefix)
+}
+
+/// Prompt user for permission to delete a prefix
+fn prompt_user_for_prefix_deletion(prefix_name: &str) -> Result<bool> {
+    use std::io::{self, Write};
+
+    print!("Also delete wine prefix '{}'? [y/N]: ", prefix_name);
+    io::stdout().flush()?;
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    let input = input.trim().to_lowercase();
+
+    Ok(input == "y" || input == "yes")
 }
 
 pub fn show_game_info(name: String) -> Result<()> {
@@ -228,21 +346,12 @@ pub fn show_game_info(name: String) -> Result<()> {
     let config = load_game_config(&dirs, &name)?;
 
     println!("Game Information for: {}", config.game.name);
-    println!("  Status: {}", config.game.status);
     println!("  Executable: {}", config.game.executable.display());
     println!("  Wine Prefix: {}", config.game.wine_prefix.display());
     println!("  Proton Version: {}", config.game.proton_version);
 
     if let Some(dxvk_version) = &config.game.dxvk_version {
         println!("  DXVK Version: {dxvk_version}");
-    }
-
-    if let Some(template) = &config.game.template {
-        println!("  Template: {template}");
-    }
-
-    if let Some(preset) = &config.game.preset {
-        println!("  Preset: {preset}");
     }
 
     println!("\nWine Configuration:");
@@ -268,37 +377,6 @@ pub fn show_game_info(name: String) -> Result<()> {
     Ok(())
 }
 
-pub fn show_status(name: Option<String>) -> Result<()> {
-    let dirs = CellarDirectories::new()?;
-
-    match name {
-        Some(game_name) => {
-            let config = load_game_config(&dirs, &game_name)?;
-            println!("Status for {}: {}", config.game.name, config.game.status);
-        }
-        None => {
-            let games = dirs.list_game_configs()?;
-            if games.is_empty() {
-                println!("No games configured.");
-            } else {
-                println!("Game Status Summary:");
-                for game_name in games {
-                    match load_game_config(&dirs, &game_name) {
-                        Ok(config) => {
-                            println!("  {}: {}", config.game.name, config.game.status);
-                        }
-                        Err(_) => {
-                            println!("  {game_name}: error");
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(())
-}
-
 async fn create_basic_game_config(
     name: &str,
     exe_path: PathBuf,
@@ -316,17 +394,21 @@ async fn create_basic_game_config(
     // Determine Proton version to use BEFORE creating prefix
     let proton_version = match proton_version {
         Some(version) => {
-            println!("Using specified Proton version: {}", version);
+            println!("Using specified Proton version: {version}");
 
             // Check if the specified version is available locally
             let proton_manager = ProtonManager::new(dirs.get_runners_path());
             let local_runners = proton_manager.discover_local_runners().await?;
-            let version_found = local_runners
-                .iter()
-                .any(|r| r.version == version || r.name.contains(version));
 
-            if !version_found {
-                println!("Proton version '{}' not found locally.", version);
+            // Find the matching runner and get its full version name
+            if let Some(matched_runner) = local_runners
+                .iter()
+                .find(|r| r.version == version || r.name.contains(version))
+            {
+                // Use the full version name from the matched runner
+                matched_runner.version.clone()
+            } else {
+                println!("Proton version '{version}' not found locally.");
 
                 // Check if version is available for download
                 match check_proton_version_available(&proton_manager, version).await {
@@ -334,7 +416,19 @@ async fn create_basic_game_config(
                         // Ask user for permission to download
                         if prompt_user_for_download(version).await? {
                             download_and_install_proton(&proton_manager, &download_version).await?;
-                            println!("Successfully installed Proton version: {}", version);
+                            println!("Successfully installed Proton version: {version}");
+
+                            // After installation, find the full version name
+                            let updated_runners = proton_manager.discover_local_runners().await?;
+                            if let Some(installed_runner) = updated_runners.iter().find(|r| {
+                                r.version == version
+                                    || r.name.contains(version)
+                                    || r.version.contains(version)
+                            }) {
+                                installed_runner.version.clone()
+                            } else {
+                                download_version
+                            }
                         } else {
                             return Err(anyhow!("Proton version '{}' is required but not available locally. Operation cancelled.", version));
                         }
@@ -347,13 +441,11 @@ async fn create_basic_game_config(
                     }
                 }
             }
-
-            version.to_string()
         }
         None => {
             println!("No Proton version specified, finding latest available...");
             let latest_version = get_latest_proton_version(dirs).await?;
-            println!("Using latest available Proton version: {}", latest_version);
+            println!("Using latest available Proton version: {latest_version}");
             latest_version
         }
     };
@@ -362,7 +454,7 @@ async fn create_basic_game_config(
     if !wine_prefix.exists() {
         create_prefix(&prefix_name, Some(&proton_version)).await?;
     } else {
-        println!("Using existing prefix: {}", prefix_name);
+        println!("Using existing prefix: {prefix_name}");
     }
 
     let config = GameConfig {
@@ -372,15 +464,11 @@ async fn create_basic_game_config(
             wine_prefix,
             proton_version,
             dxvk_version: None,
-            status: "configured".to_string(),
-            template: None,
-            preset: None,
         },
         launch: LaunchConfig::default(),
         wine_config: WineConfig::default(),
         dxvk: Default::default(),
         gamescope: GamescopeConfig::default(),
-        mangohud: MangohudConfig::default(),
         desktop: DesktopConfig::default(),
         installation: None,
     };
@@ -453,7 +541,7 @@ async fn check_proton_version_available(
     // Try partial match (e.g., user provides "9-1" for "GE-Proton9-1")
     if let Some(found) = available_versions
         .iter()
-        .find(|v| v.contains(version) || v.ends_with(&format!("-{}", version)))
+        .find(|v| v.contains(version) || v.ends_with(&format!("-{version}")))
     {
         return Ok(found.clone());
     }
@@ -468,7 +556,7 @@ async fn check_proton_version_available(
 async fn prompt_user_for_download(version: &str) -> Result<bool> {
     use std::io::{self, Write};
 
-    print!("Download Proton version '{}'? [y/N]: ", version);
+    print!("Download Proton version '{version}'? [y/N]: ");
     io::stdout().flush()?;
 
     let mut input = String::new();
@@ -480,7 +568,7 @@ async fn prompt_user_for_download(version: &str) -> Result<bool> {
 
 /// Download and install a Proton version
 async fn download_and_install_proton(proton_manager: &ProtonManager, version: &str) -> Result<()> {
-    println!("Downloading Proton version: {}", version);
+    println!("Downloading Proton version: {version}");
 
     // Extract the actual version number from the full version string
     // e.g., "GE-Proton10-10" -> "10-10"
@@ -493,7 +581,7 @@ async fn download_and_install_proton(proton_manager: &ProtonManager, version: &s
     let download_path = proton_manager
         .download_runner("proton-ge", version_number)
         .await?;
-    println!("Installing Proton version: {}", version);
+    println!("Installing Proton version: {version}");
 
     proton_manager
         .install_runner(&download_path, std::path::Path::new(""))
@@ -789,7 +877,9 @@ async fn install_runner(runner_type: &str, version: &str) -> Result<()> {
                 version
             };
 
-            let download_path = proton_manager.download_runner("proton-ge", version_number).await?;
+            let download_path = proton_manager
+                .download_runner("proton-ge", version_number)
+                .await?;
             proton_manager
                 .install_runner(&download_path, Path::new(""))
                 .await?;
@@ -1274,4 +1364,135 @@ async fn install_dxvk_to_prefix(version: &str, prefix_name: &str) -> Result<()> 
     println!("Successfully installed DXVK {version} to prefix '{prefix_name}'");
 
     Ok(())
+}
+
+// Shortcut management functions
+pub async fn handle_shortcut_command(command: ShortcutCommands) -> Result<()> {
+    match command {
+        ShortcutCommands::Create { name } => create_shortcut(&name).await,
+        ShortcutCommands::Remove { name } => remove_shortcut(&name).await,
+        ShortcutCommands::Sync => sync_shortcuts().await,
+        ShortcutCommands::List => list_shortcuts().await,
+        ShortcutCommands::ExtractIcon { name } => extract_icon(&name).await,
+        ShortcutCommands::ListIcons => list_icons().await,
+    }
+}
+
+async fn create_shortcut(game_name: &str) -> Result<()> {
+    let dirs = CellarDirectories::new()?;
+    let config = load_game_config(&dirs, game_name)?;
+
+    // Use the sanitized game name (config filename) for the exec command
+    let config_name = sanitize_filename(game_name);
+    desktop::create_desktop_shortcut(&config, &config_name).await?;
+
+    Ok(())
+}
+
+async fn remove_shortcut(game_name: &str) -> Result<()> {
+    desktop::remove_desktop_shortcut(game_name)?;
+    Ok(())
+}
+
+async fn sync_shortcuts() -> Result<()> {
+    desktop::sync_desktop_shortcuts().await?;
+    Ok(())
+}
+
+async fn list_shortcuts() -> Result<()> {
+    let shortcuts = desktop::list_desktop_shortcuts()?;
+
+    if shortcuts.is_empty() {
+        println!("No desktop shortcuts found.");
+    } else {
+        println!("Desktop shortcuts:");
+        for shortcut in shortcuts {
+            println!("  {}", shortcut);
+        }
+    }
+
+    Ok(())
+}
+
+async fn extract_icon(game_name: &str) -> Result<()> {
+    let dirs = CellarDirectories::new()?;
+    let config = load_game_config(&dirs, game_name)?;
+
+    match desktop::get_or_extract_icon(&config.game.executable, &config.game.name).await {
+        Ok(Some(icon_path)) => {
+            println!(
+                "Successfully extracted icon for {} to {}",
+                game_name,
+                icon_path.display()
+            );
+        }
+        Ok(None) => {
+            println!(
+                "No icon could be extracted from {}",
+                config.game.executable.display()
+            );
+        }
+        Err(e) => {
+            return Err(anyhow::anyhow!("Failed to extract icon: {}", e));
+        }
+    }
+
+    Ok(())
+}
+
+async fn list_icons() -> Result<()> {
+    let icons = desktop::list_game_icons()?;
+
+    if icons.is_empty() {
+        println!("No extracted icons found.");
+    } else {
+        println!("Extracted icons:");
+        for icon in icons {
+            println!("  {}", icon);
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_basic_config_loading() {
+        // Test that we can create game configs
+        let config = GameConfig {
+            game: GameInfo {
+                name: "Test Game".to_string(),
+                executable: PathBuf::from("/tmp/test.exe"),
+                wine_prefix: PathBuf::from("/tmp/prefix"),
+                proton_version: "GE-Proton8-32".to_string(),
+                dxvk_version: None,
+            },
+            launch: LaunchConfig::default(),
+            wine_config: WineConfig::default(),
+            dxvk: crate::config::game::DxvkConfig::default(),
+            gamescope: GamescopeConfig::default(),
+            desktop: DesktopConfig::default(),
+            installation: None,
+        };
+
+        // Basic validation
+        assert_eq!(config.game.name, "Test Game");
+        assert!(config.wine_config.dxvk);
+    }
+
+    #[test]
+    fn test_version_extraction() {
+        // Test the extract_version_number function for proper version comparison
+        assert_eq!(extract_version_number("GE-Proton9-1"), 9.01);
+        assert_eq!(extract_version_number("GE-Proton10-10"), 10.10);
+        assert_eq!(extract_version_number("GE-Proton8-32"), 8.32);
+
+        // Test fallback for non-standard versions
+        assert_eq!(extract_version_number("some-version-5"), 5.0);
+        assert_eq!(extract_version_number("no-numbers"), 0.0);
+    }
 }

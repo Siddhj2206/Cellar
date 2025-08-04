@@ -34,9 +34,6 @@ impl CommandBuilder {
         // Apply DXVK environment variables
         env_vars.extend(self.build_dxvk_environment()?);
 
-        // Apply MangoHUD environment variables
-        env_vars.extend(self.build_mangohud_environment()?);
-
         // Process Steam-style launch options with %command% placeholder
         let final_command = self.process_launch_options(base_command, &env_vars)?;
 
@@ -141,43 +138,27 @@ impl CommandBuilder {
         Ok(env)
     }
 
-    /// Build MangoHUD-specific environment variables
-    fn build_mangohud_environment(&self) -> Result<HashMap<String, String>> {
-        let mut env = HashMap::new();
-
-        if self.config.mangohud.enabled {
-            env.insert("MANGOHUD".to_string(), "1".to_string());
-
-            // Custom MangoHUD config file if specified
-            if let Some(config_file) = &self.config.mangohud.config_file {
-                env.insert(
-                    "MANGOHUD_CONFIGFILE".to_string(),
-                    config_file.to_string_lossy().to_string(),
-                );
-            }
-        }
-
-        Ok(env)
-    }
-
     /// Process Steam-style launch options with %command% placeholder
     fn process_launch_options(
         &self,
         base_command: Vec<String>,
         _env_vars: &HashMap<String, String>,
-    ) -> Result<ProcessedCommand> {
+    ) -> Result<Vec<String>> {
         let launch_options = &self.config.launch.launch_options;
 
         if launch_options.is_empty() {
-            // No launch options, return base command with gamescope if enabled
-            return Ok(self.wrap_with_gamescope(base_command)?);
+            // No launch options, wrap with mangohud first, then gamescope, then gamemode
+            let mangohud_wrapped = self.wrap_with_mangohud(base_command)?;
+            let gamescope_wrapped = self.wrap_with_gamescope(mangohud_wrapped)?;
+            let gamemode_wrapped = self.wrap_with_gamemode(gamescope_wrapped)?;
+            return Ok(gamemode_wrapped);
         }
 
         // Parse launch options into tokens
         let tokens = self.parse_launch_options(launch_options)?;
 
         // Find and replace %command% placeholder
-        let mut final_command = Vec::new();
+        let mut final_command = Vec::with_capacity(tokens.len() + base_command.len());
         let mut found_command_placeholder = false;
 
         for token in tokens {
@@ -187,8 +168,8 @@ impl CommandBuilder {
                 }
                 found_command_placeholder = true;
 
-                // Replace %command% with the base command
-                final_command.extend(base_command.clone());
+                // Replace %command% with the base command without cloning
+                final_command.extend_from_slice(&base_command);
             } else {
                 final_command.push(token);
             }
@@ -196,21 +177,24 @@ impl CommandBuilder {
 
         if !found_command_placeholder {
             // No %command% placeholder found, append the base command at the end
-            final_command.extend(base_command);
+            final_command.extend_from_slice(&base_command);
         }
 
-        // Wrap with gamescope if enabled
-        self.wrap_with_gamescope(final_command)
+        // Wrap with mangohud first, then gamescope, then gamemode
+        let mangohud_wrapped = self.wrap_with_mangohud(final_command)?;
+        let gamescope_wrapped = self.wrap_with_gamescope(mangohud_wrapped)?;
+        let gamemode_wrapped = self.wrap_with_gamemode(gamescope_wrapped)?;
+        Ok(gamemode_wrapped)
     }
 
-    /// Parse launch options string into tokens, handling quotes and environment variables
+    /// Parse launch options string into tokens, handling quotes and environment variables safely
     fn parse_launch_options(&self, launch_options: &str) -> Result<Vec<String>> {
         let mut tokens = Vec::new();
         let mut current_token = String::new();
         let mut in_quotes = false;
-        let mut chars = launch_options.chars().peekable();
+        let chars = launch_options.chars().peekable();
 
-        while let Some(ch) = chars.next() {
+        for ch in chars {
             match ch {
                 '"' if !in_quotes => {
                     in_quotes = true;
@@ -220,7 +204,9 @@ impl CommandBuilder {
                 }
                 ' ' if !in_quotes => {
                     if !current_token.is_empty() {
-                        tokens.push(current_token.clone());
+                        // Validate and sanitize token before adding
+                        let sanitized = self.sanitize_token(&current_token)?;
+                        tokens.push(sanitized);
                         current_token.clear();
                     }
                 }
@@ -231,7 +217,8 @@ impl CommandBuilder {
         }
 
         if !current_token.is_empty() {
-            tokens.push(current_token);
+            let sanitized = self.sanitize_token(&current_token)?;
+            tokens.push(sanitized);
         }
 
         if in_quotes {
@@ -241,10 +228,104 @@ impl CommandBuilder {
         Ok(tokens)
     }
 
+    /// Sanitize a command token to prevent shell injection
+    fn sanitize_token(&self, token: &str) -> Result<String> {
+        // Check for dangerous characters and patterns
+        let dangerous_chars = [
+            '|', '&', ';', '`', '$', '(', ')', '{', '}', '[', ']', '*', '?', '~', '\n', '\r', '\t',
+            '\'', '"',
+        ];
+
+        for ch in dangerous_chars {
+            if token.contains(ch) {
+                return Err(anyhow!(
+                    "Dangerous character '{}' found in launch option: {}",
+                    ch,
+                    token
+                ));
+            }
+        }
+
+        // Check for dangerous patterns
+        let dangerous_patterns = ["../", "./", "//", "\\\\", "\n", "\r"];
+        for pattern in dangerous_patterns {
+            if token.contains(pattern) {
+                return Err(anyhow!(
+                    "Dangerous pattern '{}' found in launch option: {}",
+                    pattern,
+                    token
+                ));
+            }
+        }
+
+        // Ensure the token doesn't start with dangerous prefixes
+        let dangerous_prefixes = ["-", "--"];
+        for prefix in dangerous_prefixes {
+            if token.starts_with(prefix) && token != "%command%" {
+                // Allow well-known safe options only
+                if !self.is_safe_option(token) {
+                    return Err(anyhow!("Potentially dangerous option: {}", token));
+                }
+            }
+        }
+
+        Ok(token.to_string())
+    }
+
+    /// Check if an option is in the allowlist of safe options
+    fn is_safe_option(&self, option: &str) -> bool {
+        // Allowlist of safe command line options
+        let safe_options = [
+            // Common safe options
+            "--fullscreen",
+            "--windowed",
+            "--width",
+            "--height",
+            "--vsync",
+            "--no-vsync",
+            // Mangohud options
+            "--dlsym",
+            // Gamescope options
+            "-f",
+            "-w",
+            "-h",
+            "-W",
+            "-H",
+            "-r",
+            "-F",
+            "-S",
+            "-n",
+            "-b",
+            "--force-grab-cursor",
+            "--expose-wayland",
+            "--hdr-enabled",
+            "--adaptive-sync",
+            "--immediate-flips",
+            "--mangoapp",
+        ];
+
+        safe_options.contains(&option) ||
+        // Allow numeric values
+        option.parse::<i32>().is_ok() ||
+        // Allow resolution patterns like "1920x1080"
+        option.matches('x').count() == 1 && option.split('x').all(|s| s.parse::<u32>().is_ok())
+    }
+
+    /// Wrap command with mangohud if enabled (but not when gamescope is enabled)
+    fn wrap_with_mangohud(&self, command: Vec<String>) -> Result<Vec<String>> {
+        if !self.config.launch.mangohud || self.config.gamescope.enabled {
+            return Ok(command);
+        }
+
+        let mut mangohud_cmd = vec!["mangohud".to_string()];
+        mangohud_cmd.extend(command);
+        Ok(mangohud_cmd)
+    }
+
     /// Wrap command with gamescope if enabled
-    fn wrap_with_gamescope(&self, command: Vec<String>) -> Result<ProcessedCommand> {
+    fn wrap_with_gamescope(&self, command: Vec<String>) -> Result<Vec<String>> {
         if !self.config.gamescope.enabled {
-            return Ok(ProcessedCommand::Direct(command));
+            return Ok(command);
         }
 
         let gamescope_config = &self.config.gamescope;
@@ -320,48 +401,188 @@ impl CommandBuilder {
             gamescope_cmd.push("--immediate-flips".to_string());
         }
 
+        // Add --mangoapp if mangohud is enabled
+        if self.config.launch.mangohud {
+            gamescope_cmd.push("--mangoapp".to_string());
+        }
+
         // Add separator and the actual command
         gamescope_cmd.push("--".to_string());
         gamescope_cmd.extend(command);
 
-        Ok(ProcessedCommand::Gamescope(gamescope_cmd))
+        Ok(gamescope_cmd)
+    }
+
+    /// Wrap command with gamemode if enabled
+    fn wrap_with_gamemode(&self, command: Vec<String>) -> Result<Vec<String>> {
+        if !self.config.launch.gamemode {
+            return Ok(command);
+        }
+
+        let mut gamemode_cmd = vec!["gamemoderun".to_string()];
+        gamemode_cmd.extend(command);
+        Ok(gamemode_cmd)
     }
 }
 
 /// Represents the final launch command with all components
 #[derive(Debug, Clone)]
 pub struct LaunchCommand {
-    pub command: ProcessedCommand,
+    pub command: Vec<String>,
     pub environment: HashMap<String, String>,
     pub working_directory: PathBuf,
 }
 
-/// Represents a processed command that may be wrapped with gamescope
-#[derive(Debug, Clone)]
-pub enum ProcessedCommand {
-    Direct(Vec<String>),
-    Gamescope(Vec<String>),
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::game::*;
 
-impl ProcessedCommand {
-    pub fn as_args(&self) -> &[String] {
-        match self {
-            ProcessedCommand::Direct(args) => args,
-            ProcessedCommand::Gamescope(args) => args,
+    fn create_test_config() -> GameConfig {
+        GameConfig {
+            game: GameInfo {
+                name: "Test Game".to_string(),
+                executable: PathBuf::from("/path/to/game.exe"),
+                wine_prefix: PathBuf::from("/path/to/prefix"),
+                proton_version: "GE-Proton8-32".to_string(),
+                dxvk_version: None,
+            },
+            launch: LaunchConfig {
+                launch_options: "PROTON_ENABLE_WAYLAND=1 gamemoderun %command%".to_string(),
+                game_args: vec!["--windowed".to_string(), "--dx11".to_string()],
+                gamemode: false,
+                mangohud: false,
+            },
+            wine_config: WineConfig::default(),
+            dxvk: DxvkConfig::default(),
+            gamescope: GamescopeConfig::default(),
+            desktop: DesktopConfig::default(),
+            installation: None,
         }
     }
 
-    pub fn program(&self) -> &str {
-        match self {
-            ProcessedCommand::Direct(args) => &args[0],
-            ProcessedCommand::Gamescope(args) => &args[0],
-        }
+    #[test]
+    fn test_build_complete_launch_command() {
+        let config = create_test_config();
+        let builder =
+            CommandBuilder::new(config).with_proton_path(PathBuf::from("/path/to/proton"));
+
+        let launch_command = builder.build().unwrap();
+
+        // Verify command structure
+        let args = &launch_command.command;
+        assert!(!args.is_empty());
+        assert!(args.contains(&"umu-run".to_string()));
+        assert!(args.contains(&"/path/to/game.exe".to_string()));
+
+        // Verify environment variables
+        assert!(launch_command.environment.contains_key("WINEPREFIX"));
+        assert!(launch_command.environment.contains_key("PROTONPATH"));
+        assert!(launch_command.environment.contains_key("WINEARCH"));
+
+        // Verify working directory
+        assert_eq!(
+            launch_command.working_directory,
+            PathBuf::from("/path/to/prefix")
+        );
     }
 
-    pub fn args(&self) -> &[String] {
-        match self {
-            ProcessedCommand::Direct(args) => &args[1..],
-            ProcessedCommand::Gamescope(args) => &args[1..],
-        }
+    #[test]
+    fn test_command_builder_creation() {
+        let config = create_test_config();
+        let builder = CommandBuilder::new(config);
+
+        // Test that we can create a builder without errors
+        let builder_with_proton = builder.with_proton_path(PathBuf::from("/path/to/proton"));
+
+        // This should not panic
+        drop(builder_with_proton);
+    }
+
+    #[test]
+    fn test_processed_command_types() {
+        // Test direct command creation
+        let direct_cmd = vec!["umu-run".to_string(), "game.exe".to_string()];
+
+        assert_eq!(direct_cmd.len(), 2);
+        assert_eq!(direct_cmd[0], "umu-run");
+        assert_eq!(direct_cmd[1], "game.exe");
+    }
+
+    #[test]
+    fn test_gamemode_wrapper() {
+        let mut config = create_test_config();
+        config.launch.gamemode = true;
+        config.launch.launch_options = "".to_string(); // No launch options to test pure gamemode
+
+        let builder =
+            CommandBuilder::new(config).with_proton_path(PathBuf::from("/path/to/proton"));
+
+        let launch_command = builder.build().unwrap();
+        let args = &launch_command.command;
+
+        // Should start with gamemoderun
+        assert_eq!(args[0], "gamemoderun");
+        // Should contain umu-run somewhere
+        assert!(args.contains(&"umu-run".to_string()));
+    }
+
+    #[test]
+    fn test_gamemode_with_mangohud() {
+        let mut config = create_test_config();
+        config.launch.gamemode = true;
+        config.launch.launch_options = "".to_string();
+        config.launch.mangohud = true;
+
+        let builder =
+            CommandBuilder::new(config).with_proton_path(PathBuf::from("/path/to/proton"));
+
+        let launch_command = builder.build().unwrap();
+        let args = &launch_command.command;
+
+        // Should be: gamemoderun mangohud umu-run ...
+        assert_eq!(args[0], "gamemoderun");
+        assert_eq!(args[1], "mangohud");
+        assert!(args.contains(&"umu-run".to_string()));
+    }
+
+    #[test]
+    fn test_gamemode_with_gamescope_and_mangohud() {
+        let mut config = create_test_config();
+        config.launch.gamemode = true;
+        config.launch.launch_options = "".to_string();
+        config.launch.mangohud = true;
+        config.gamescope.enabled = true;
+
+        let builder =
+            CommandBuilder::new(config).with_proton_path(PathBuf::from("/path/to/proton"));
+
+        let launch_command = builder.build().unwrap();
+        let args = &launch_command.command;
+
+        // Should be: gamemoderun gamescope <args> --mangoapp -- umu-run ...
+        assert_eq!(args[0], "gamemoderun");
+        assert_eq!(args[1], "gamescope");
+        assert!(args.contains(&"--mangoapp".to_string()));
+        assert!(args.contains(&"--".to_string()));
+        assert!(args.contains(&"umu-run".to_string()));
+    }
+
+    #[test]
+    fn test_gamemode_disabled() {
+        let mut config = create_test_config();
+        config.launch.gamemode = false;
+        config.launch.launch_options = "".to_string();
+
+        let builder =
+            CommandBuilder::new(config).with_proton_path(PathBuf::from("/path/to/proton"));
+
+        let launch_command = builder.build().unwrap();
+        let args = &launch_command.command;
+
+        // Should NOT start with gamemoderun
+        assert_ne!(args[0], "gamemoderun");
+        // Should start with umu-run directly
+        assert_eq!(args[0], "umu-run");
     }
 }

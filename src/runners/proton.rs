@@ -1,35 +1,36 @@
+use super::common::{AssetFilter, BaseGitHubRunner, GitHubRunnerConfig};
 use super::{Runner, RunnerManager, RunnerType};
 use anyhow::{anyhow, Result};
-use reqwest;
-use serde::{Deserialize, Serialize};
+use regex::Regex;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProtonRelease {
-    pub tag_name: String,
-    pub name: String,
-    pub assets: Vec<ProtonAsset>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProtonAsset {
-    pub name: String,
-    pub browser_download_url: String,
-    pub size: u64,
-}
-
 pub struct ProtonManager {
     pub steam_path: Option<PathBuf>,
-    pub cellar_runners_path: PathBuf,
+    pub base_runner: BaseGitHubRunner,
 }
 
 impl ProtonManager {
     pub fn new(cellar_runners_path: PathBuf) -> Self {
         let steam_path = Self::find_steam_path();
+
+        fn asset_filter(name: &str) -> bool {
+            name.ends_with(".tar.gz")
+        }
+
+        let config = GitHubRunnerConfig {
+            repo_owner: "GloriousEggroll".to_string(),
+            repo_name: "proton-ge-custom".to_string(),
+            user_agent: "cellar/0.1.0".to_string(),
+            max_download_size: 2 * 1024 * 1024 * 1024, // 2GB
+            asset_filter: asset_filter as AssetFilter,
+        };
+
+        let base_runner = BaseGitHubRunner::new(config, cellar_runners_path);
+
         Self {
             steam_path,
-            cellar_runners_path,
+            base_runner,
         }
     }
 
@@ -86,7 +87,7 @@ impl ProtonManager {
 
     pub async fn discover_cellar_proton(&self) -> Result<Vec<Runner>> {
         let mut runners = Vec::new();
-        let proton_path = self.cellar_runners_path.join("proton");
+        let proton_path = self.base_runner.cellar_runners_path.join("proton");
 
         if proton_path.exists() {
             let mut entries = fs::read_dir(&proton_path).await?;
@@ -120,64 +121,26 @@ impl ProtonManager {
 
     fn extract_version_from_name(&self, name: &str) -> String {
         // Extract version from names like "GE-Proton8-32" or "Proton 8.0"
-        if let Some(captures) = regex::Regex::new(r"(?i)proton[^\d]*(\d+(?:[.-]\d+)*)")
+        if let Some(captures) = Regex::new(r"(?i)proton[^\d]*(\d+(?:[.-]\d+)*)")
             .unwrap()
             .captures(name)
         {
             captures
                 .get(1)
-                .map_or(name.to_string(), |m| m.as_str().to_string())
+                .map_or_else(|| name.to_string(), |m| m.as_str().to_string())
         } else {
             name.to_string()
         }
     }
 
     pub async fn download_ge_proton(&self, version: &str) -> Result<PathBuf> {
-        let client = reqwest::Client::builder()
-            .user_agent("cellar/0.1.0")
-            .build()?;
-
-        // Get release info from GitHub API
-        let url = format!(
-            "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/tags/GE-Proton{version}"
-        );
-        let response = client.get(&url).send().await?;
-
-        if !response.status().is_success() {
-            return Err(anyhow!(
-                "Failed to fetch release info for version {}",
-                version
-            ));
-        }
-
-        let release: ProtonRelease = response.json().await?;
-
-        // Find the tar.gz asset (Proton-GE uses tar.gz)
-        let asset = release
-            .assets
-            .iter()
-            .find(|a| a.name.ends_with(".tar.gz"))
-            .ok_or_else(|| anyhow!("No tar.gz asset found for version {}", version))?;
-
-        // Download the asset
-        let download_response = client.get(&asset.browser_download_url).send().await?;
-
-        if !download_response.status().is_success() {
-            return Err(anyhow!("Failed to download {}", asset.name));
-        }
-
-        // Save to temporary file
-        let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join(&asset.name);
-
-        let bytes = download_response.bytes().await?;
-        fs::write(&temp_file, bytes).await?;
-
-        Ok(temp_file)
+        self.base_runner
+            .download_from_github(version, "GE-Proton")
+            .await
     }
 
     pub async fn extract_proton(&self, archive_path: &Path, version: &str) -> Result<PathBuf> {
-        let proton_dir = self.cellar_runners_path.join("proton");
+        let proton_dir = self.base_runner.cellar_runners_path.join("proton");
         fs::create_dir_all(&proton_dir).await?;
 
         let extract_path = proton_dir.join(version);
@@ -267,51 +230,10 @@ impl RunnerManager for ProtonManager {
     }
 
     async fn get_available_versions(&self) -> Result<Vec<String>> {
-        let client = reqwest::Client::builder()
-            .user_agent("curl/8.15.0")
-            .build()?;
-        let url = "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases";
-
-        let response = client.get(url).send().await?;
-        if !response.status().is_success() {
-            return Err(anyhow!(
-                "Failed to fetch available versions: HTTP {}",
-                response.status()
-            ));
-        }
-
-        let releases: Vec<ProtonRelease> = response
-            .json()
-            .await
-            .map_err(|e| anyhow!("Failed to parse GitHub API response: {}", e))?;
-        let versions = releases.into_iter().map(|r| r.tag_name).collect();
-
-        Ok(versions)
+        self.base_runner.get_github_versions().await
     }
 
     async fn delete_runner(&self, runner_path: &Path) -> Result<()> {
-        if !runner_path.exists() {
-            return Err(anyhow!(
-                "Runner path does not exist: {}",
-                runner_path.display()
-            ));
-        }
-
-        if !runner_path.is_dir() {
-            return Err(anyhow!(
-                "Runner path is not a directory: {}",
-                runner_path.display()
-            ));
-        }
-
-        fs::remove_dir_all(runner_path).await.map_err(|e| {
-            anyhow!(
-                "Failed to delete runner at {}: {}",
-                runner_path.display(),
-                e
-            )
-        })?;
-
-        Ok(())
+        self.base_runner.delete_runner_common(runner_path).await
     }
 }

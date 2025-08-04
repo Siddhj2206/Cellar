@@ -3,6 +3,7 @@ use clap::Parser;
 
 mod cli;
 mod config;
+mod desktop;
 mod launch;
 mod runners;
 mod utils;
@@ -37,7 +38,7 @@ async fn main() -> Result<()> {
             cli::commands::launch_game(name).await?;
         }
         Commands::List => {
-            cli::commands::list_games()?;
+            cli::commands::list_games(None)?;
         }
         Commands::Remove { name } => {
             cli::commands::remove_game(name)?;
@@ -45,14 +46,14 @@ async fn main() -> Result<()> {
         Commands::Info { name } => {
             cli::commands::show_game_info(name)?;
         }
-        Commands::Status { name } => {
-            cli::commands::show_status(name)?;
-        }
         Commands::Runners { command } => {
             cli::commands::handle_runners_command(command).await?;
         }
         Commands::Prefix { command } => {
             cli::commands::handle_prefix_command(command).await?;
+        }
+        Commands::Shortcut { command } => {
+            cli::commands::handle_shortcut_command(command).await?;
         }
     }
 

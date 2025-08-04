@@ -11,8 +11,6 @@ pub struct GameConfig {
     #[serde(default)]
     pub gamescope: GamescopeConfig,
     #[serde(default)]
-    pub mangohud: MangohudConfig,
-    #[serde(default)]
     pub desktop: DesktopConfig,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -27,12 +25,6 @@ pub struct GameInfo {
     pub proton_version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dxvk_version: Option<String>,
-    #[serde(default = "default_status")]
-    pub status: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub template: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub preset: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -41,6 +33,10 @@ pub struct LaunchConfig {
     pub launch_options: String,
     #[serde(default)]
     pub game_args: Vec<String>,
+    #[serde(default)]
+    pub gamemode: bool,
+    #[serde(default)]
+    pub mangohud: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -96,29 +92,9 @@ pub struct GamescopeConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MangohudConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-    #[serde(default = "default_true")]
-    pub fps: bool,
-    #[serde(default = "default_true")]
-    pub gpu_stats: bool,
-    #[serde(default = "default_true")]
-    pub cpu_stats: bool,
-    #[serde(default)]
-    pub frame_timing: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub config_file: Option<PathBuf>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DesktopConfig {
     #[serde(default = "default_true")]
     pub create_shortcut: bool,
-    #[serde(default = "default_true")]
-    pub create_symlink: bool,
-    #[serde(default)]
-    pub install_system: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub icon_path: Option<PathBuf>,
     #[serde(default = "default_categories")]
@@ -127,10 +103,7 @@ pub struct DesktopConfig {
     pub keywords: Vec<String>,
     #[serde(default = "default_comment")]
     pub comment: String,
-    #[serde(default = "default_true")]
-    pub prefix_name: bool,
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstallationInfo {
@@ -140,10 +113,6 @@ pub struct InstallationInfo {
 }
 
 // Default value functions
-fn default_status() -> String {
-    "configured".to_string()
-}
-
 fn default_true() -> bool {
     true
 }
@@ -221,30 +190,101 @@ impl Default for GamescopeConfig {
     }
 }
 
-impl Default for MangohudConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            fps: true,
-            gpu_stats: true,
-            cpu_stats: true,
-            frame_timing: false,
-            config_file: None,
-        }
-    }
-}
-
 impl Default for DesktopConfig {
     fn default() -> Self {
         Self {
             create_shortcut: true,
-            create_symlink: true,
-            install_system: false,
             icon_path: None,
             categories: vec!["Game".to_string()],
             keywords: vec!["game".to_string(), "windows".to_string()],
             comment: "Windows game via Cellar".to_string(),
-            prefix_name: true,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_game_config_basic_functionality() {
+        let config = GameConfig {
+            game: GameInfo {
+                name: "Test Game".to_string(),
+                executable: std::path::PathBuf::from("/path/to/game.exe"),
+                wine_prefix: std::path::PathBuf::from("/path/to/prefix"),
+                proton_version: "GE-Proton8-32".to_string(),
+                dxvk_version: None,
+            },
+            launch: LaunchConfig::default(),
+            wine_config: WineConfig::default(),
+            dxvk: DxvkConfig::default(),
+            gamescope: GamescopeConfig::default(),
+            desktop: DesktopConfig::default(),
+            installation: None,
+        };
+
+        assert_eq!(config.game.name, "Test Game");
+        assert_eq!(config.game.proton_version, "GE-Proton8-32");
+        assert!(config.wine_config.esync);
+        assert!(!config.launch.mangohud);
+        assert!(!config.gamescope.enabled);
+    }
+
+    #[test]
+    fn test_game_config_serialization() {
+        let config = GameConfig {
+            game: GameInfo {
+                name: "Test Game".to_string(),
+                executable: std::path::PathBuf::from("/path/to/game.exe"),
+                wine_prefix: std::path::PathBuf::from("/path/to/prefix"),
+                proton_version: "GE-Proton8-32".to_string(),
+                dxvk_version: None,
+            },
+            launch: LaunchConfig::default(),
+            wine_config: WineConfig::default(),
+            dxvk: DxvkConfig::default(),
+            gamescope: GamescopeConfig::default(),
+            desktop: DesktopConfig::default(),
+            installation: None,
+        };
+
+        let toml_string = toml::to_string(&config).unwrap();
+
+        // Verify it contains expected sections
+        assert!(toml_string.contains("[game]"));
+        assert!(toml_string.contains("[launch]"));
+        assert!(toml_string.contains("[wine_config]"));
+        assert!(toml_string.contains("Test Game"));
+        assert!(toml_string.contains("GE-Proton8-32"));
+    }
+
+    #[test]
+    fn test_game_config_deserialization() {
+        let toml_string = r#"
+[game]
+name = "Test Game"
+executable = "/path/to/game.exe"
+wine_prefix = "/path/to/prefix"
+proton_version = "GE-Proton8-32"
+
+[launch]
+launch_options = "PROTON_ENABLE_WAYLAND=1 %command%"
+game_args = ["--windowed"]
+
+[wine_config]
+esync = true
+fsync = true
+dxvk = true
+dxvk_async = true
+large_address_aware = false
+wineserver_kill_timeout = 5
+"#;
+
+        let config: GameConfig = toml::from_str(toml_string).unwrap();
+        assert_eq!(config.game.name, "Test Game");
+        assert_eq!(config.game.proton_version, "GE-Proton8-32");
+        assert_eq!(config.launch.game_args, vec!["--windowed"]);
+        assert!(config.wine_config.esync);
     }
 }
