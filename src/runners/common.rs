@@ -1,9 +1,12 @@
+
 use anyhow::{anyhow, Result};
-use crate::utils::archive::extract_tar_gz_secure;
 use reqwest;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tokio::fs;
+
+/// Type alias for asset filter function
+pub type AssetFilter = fn(&str) -> bool;
 
 /// Common configuration for GitHub-based runners
 pub struct GitHubRunnerConfig {
@@ -11,9 +14,7 @@ pub struct GitHubRunnerConfig {
     pub repo_name: String,
     pub user_agent: String,
     pub max_download_size: u64,
-    pub max_files: usize,
-    pub max_total_size: u64,
-    pub asset_filter: Box<dyn Fn(&str) -> bool + Send + Sync>,
+    pub asset_filter: AssetFilter,
 }
 
 /// Common GitHub release structures
@@ -54,10 +55,7 @@ impl BaseGitHubRunner {
         // Get release info from GitHub API
         let url = format!(
             "https://api.github.com/repos/{}/{}/releases/tags/{}{}",
-            self.config.repo_owner, 
-            self.config.repo_name, 
-            tag_prefix,
-            version
+            self.config.repo_owner, self.config.repo_name, tag_prefix, version
         );
         let response = client.get(&url).send().await?;
 
@@ -82,8 +80,8 @@ impl BaseGitHubRunner {
         // Check asset size limit
         if asset.size > self.config.max_download_size {
             return Err(anyhow!(
-                "Asset too large: {} bytes (max {} bytes)", 
-                asset.size, 
+                "Asset too large: {} bytes (max {} bytes)",
+                asset.size,
                 self.config.max_download_size
             ));
         }
@@ -111,7 +109,7 @@ impl BaseGitHubRunner {
         let temp_file = temp_dir.join(&asset.name);
 
         let bytes = download_response.bytes().await?;
-        
+
         // Verify downloaded size
         if bytes.len() as u64 != asset.size {
             return Err(anyhow!(
@@ -120,34 +118,10 @@ impl BaseGitHubRunner {
                 bytes.len()
             ));
         }
-        
+
         fs::write(&temp_file, bytes).await?;
 
         Ok(temp_file)
-    }
-
-    /// Extract a tar.gz runner archive securely
-    pub async fn extract_runner_archive(
-        &self,
-        archive_path: &Path,
-        runner_subdir: &str,
-        version: &str,
-    ) -> Result<PathBuf> {
-        let runner_dir = self.cellar_runners_path.join(runner_subdir);
-        let extract_path = runner_dir.join(version);
-        
-        // Use secure extraction with configured limits
-        extract_tar_gz_secure(
-            archive_path, 
-            &extract_path, 
-            self.config.max_files, 
-            self.config.max_total_size
-        ).await?;
-
-        // Clean up archive
-        fs::remove_file(archive_path).await?;
-
-        Ok(extract_path)
     }
 
     /// Get available versions from GitHub releases
@@ -155,11 +129,10 @@ impl BaseGitHubRunner {
         let client = reqwest::Client::builder()
             .user_agent(&self.config.user_agent)
             .build()?;
-        
+
         let url = format!(
             "https://api.github.com/repos/{}/{}/releases",
-            self.config.repo_owner,
-            self.config.repo_name
+            self.config.repo_owner, self.config.repo_name
         );
 
         let response = client.get(&url).send().await?;
@@ -176,7 +149,7 @@ impl BaseGitHubRunner {
             .json()
             .await
             .map_err(|e| anyhow!("Failed to parse GitHub API response: {}", e))?;
-        
+
         let versions = releases.into_iter().map(|r| r.tag_name).collect();
 
         Ok(versions)

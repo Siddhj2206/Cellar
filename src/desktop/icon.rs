@@ -126,7 +126,11 @@ pub async fn get_or_extract_icon(exe_path: &Path, game_name: &str) -> Result<Opt
     // Try to extract and convert icon
     match extract_and_convert_icon(exe_path, game_name).await {
         Ok(icon_path) => {
-            println!("Extracted icon for {} to {}", game_name, icon_path.display());
+            println!(
+                "Extracted icon for {} to {}",
+                game_name,
+                icon_path.display()
+            );
             Ok(Some(icon_path))
         }
         Err(e) => {
@@ -140,7 +144,7 @@ pub async fn get_or_extract_icon(exe_path: &Path, game_name: &str) -> Result<Opt
 /// Remove icon files for a game
 pub fn remove_game_icons(game_name: &str) -> Result<()> {
     let dirs = CellarDirectories::new()?;
-    
+
     // Remove both ICO and PNG versions if they exist
     let ico_path = dirs.get_game_icon_path(game_name, "ico");
     let png_path = dirs.get_game_icon_path(game_name, "png");

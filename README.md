@@ -74,7 +74,7 @@ cp target/release/cellar ~/.local/bin/
 - `cellar list` - List all configured games
 - `cellar remove <name>` - Remove a game (with optional prefix cleanup)
 - `cellar info <name>` - Show detailed game information
-- `cellar status [name]` - Show game status
+
 
 ### Runner Management
 

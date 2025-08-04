@@ -4,6 +4,3 @@ pub mod desktop;
 pub mod launch;
 pub mod runners;
 pub mod utils;
-
-#[cfg(test)]
-mod tests;

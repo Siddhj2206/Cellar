@@ -53,14 +53,18 @@ fn validate_gamescope_config(config: &super::game::GamescopeConfig) -> Result<()
     }
 
     if config.output_width == 0 || config.output_height == 0 {
-        return Err(anyhow!("Gamescope output width and height must be greater than 0"));
+        return Err(anyhow!(
+            "Gamescope output width and height must be greater than 0"
+        ));
     }
 
     if config.refresh_rate == 0 {
         return Err(anyhow!("Gamescope refresh rate must be greater than 0"));
     }
 
-    let valid_upscaling = ["fsr", "nis", "integer", "stretch", "linear", "nearest", "off"];
+    let valid_upscaling = [
+        "fsr", "nis", "integer", "stretch", "linear", "nearest", "off",
+    ];
     if !valid_upscaling.contains(&config.upscaling.as_str()) {
         return Err(anyhow!(
             "Invalid upscaling method '{}'. Must be one of: {}",

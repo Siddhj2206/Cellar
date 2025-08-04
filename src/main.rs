@@ -46,9 +46,6 @@ async fn main() -> Result<()> {
         Commands::Info { name } => {
             cli::commands::show_game_info(name)?;
         }
-        Commands::Status { name } => {
-            cli::commands::list_games(name)?;
-        }
         Commands::Runners { command } => {
             cli::commands::handle_runners_command(command).await?;
         }

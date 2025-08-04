@@ -91,7 +91,6 @@ pub struct GamescopeConfig {
     pub immediate_flips: bool,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DesktopConfig {
     #[serde(default = "default_true")]
@@ -105,7 +104,6 @@ pub struct DesktopConfig {
     #[serde(default = "default_comment")]
     pub comment: String,
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstallationInfo {
@@ -192,7 +190,6 @@ impl Default for GamescopeConfig {
     }
 }
 
-
 impl Default for DesktopConfig {
     fn default() -> Self {
         Self {
@@ -202,5 +199,92 @@ impl Default for DesktopConfig {
             keywords: vec!["game".to_string(), "windows".to_string()],
             comment: "Windows game via Cellar".to_string(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_game_config_basic_functionality() {
+        let config = GameConfig {
+            game: GameInfo {
+                name: "Test Game".to_string(),
+                executable: std::path::PathBuf::from("/path/to/game.exe"),
+                wine_prefix: std::path::PathBuf::from("/path/to/prefix"),
+                proton_version: "GE-Proton8-32".to_string(),
+                dxvk_version: None,
+            },
+            launch: LaunchConfig::default(),
+            wine_config: WineConfig::default(),
+            dxvk: DxvkConfig::default(),
+            gamescope: GamescopeConfig::default(),
+            desktop: DesktopConfig::default(),
+            installation: None,
+        };
+
+        assert_eq!(config.game.name, "Test Game");
+        assert_eq!(config.game.proton_version, "GE-Proton8-32");
+        assert!(config.wine_config.esync);
+        assert!(!config.launch.mangohud);
+        assert!(!config.gamescope.enabled);
+    }
+
+    #[test]
+    fn test_game_config_serialization() {
+        let config = GameConfig {
+            game: GameInfo {
+                name: "Test Game".to_string(),
+                executable: std::path::PathBuf::from("/path/to/game.exe"),
+                wine_prefix: std::path::PathBuf::from("/path/to/prefix"),
+                proton_version: "GE-Proton8-32".to_string(),
+                dxvk_version: None,
+            },
+            launch: LaunchConfig::default(),
+            wine_config: WineConfig::default(),
+            dxvk: DxvkConfig::default(),
+            gamescope: GamescopeConfig::default(),
+            desktop: DesktopConfig::default(),
+            installation: None,
+        };
+
+        let toml_string = toml::to_string(&config).unwrap();
+
+        // Verify it contains expected sections
+        assert!(toml_string.contains("[game]"));
+        assert!(toml_string.contains("[launch]"));
+        assert!(toml_string.contains("[wine_config]"));
+        assert!(toml_string.contains("Test Game"));
+        assert!(toml_string.contains("GE-Proton8-32"));
+    }
+
+    #[test]
+    fn test_game_config_deserialization() {
+        let toml_string = r#"
+[game]
+name = "Test Game"
+executable = "/path/to/game.exe"
+wine_prefix = "/path/to/prefix"
+proton_version = "GE-Proton8-32"
+
+[launch]
+launch_options = "PROTON_ENABLE_WAYLAND=1 %command%"
+game_args = ["--windowed"]
+
+[wine_config]
+esync = true
+fsync = true
+dxvk = true
+dxvk_async = true
+large_address_aware = false
+wineserver_kill_timeout = 5
+"#;
+
+        let config: GameConfig = toml::from_str(toml_string).unwrap();
+        assert_eq!(config.game.name, "Test Game");
+        assert_eq!(config.game.proton_version, "GE-Proton8-32");
+        assert_eq!(config.launch.game_args, vec!["--windowed"]);
+        assert!(config.wine_config.esync);
     }
 }
