@@ -1,4 +1,3 @@
-
 use anyhow::{anyhow, Result};
 use reqwest;
 use serde::{Deserialize, Serialize};
@@ -39,6 +38,21 @@ pub struct BaseGitHubRunner {
 }
 
 impl BaseGitHubRunner {
+    /// Creates a new `BaseGitHubRunner` with the specified configuration and runners directory path.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let config = GitHubRunnerConfig {
+    ///     repo_owner: "owner".to_string(),
+    ///     repo_name: "repo".to_string(),
+    ///     user_agent: "my-agent".to_string(),
+    ///     max_download_size: 100_000_000,
+    ///     asset_filter: |name| name.ends_with(".tar.gz"),
+    /// };
+    /// let runners_path = std::path::PathBuf::from("/tmp/runners");
+    /// let runner = BaseGitHubRunner::new(config, runners_path);
+    /// ```
     pub fn new(config: GitHubRunnerConfig, cellar_runners_path: PathBuf) -> Self {
         Self {
             config,
@@ -46,7 +60,32 @@ impl BaseGitHubRunner {
         }
     }
 
-    /// Download a runner from GitHub releases
+    /// Downloads a runner asset from a specific GitHub release and saves it to a temporary file.
+    ///
+    /// Fetches release information for the given version and tag prefix, selects an asset matching the configured filter,
+    /// verifies its size constraints, downloads the asset, and writes it to the system's temporary directory. Returns the path
+    /// to the downloaded file if successful.
+    ///
+    /// # Parameters
+    /// - `version`: The release version to fetch.
+    /// - `tag_prefix`: The prefix to prepend to the version when constructing the release tag.
+    ///
+    /// # Returns
+    /// The path to the downloaded asset file in the temporary directory.
+    ///
+    /// # Errors
+    /// Returns an error if the release or asset cannot be found, if the asset exceeds the maximum allowed size,
+    /// if the download fails, or if the downloaded file does not match the expected size.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use runners::common::{BaseGitHubRunner, GitHubRunnerConfig};
+    /// # async fn example(runner: BaseGitHubRunner) {
+    /// let path = runner.download_from_github("v1.2.3", "v").await.unwrap();
+    /// assert!(path.exists());
+    /// # }
+    /// ```
     pub async fn download_from_github(&self, version: &str, tag_prefix: &str) -> Result<PathBuf> {
         let client = reqwest::Client::builder()
             .user_agent(&self.config.user_agent)
@@ -124,7 +163,23 @@ impl BaseGitHubRunner {
         Ok(temp_file)
     }
 
-    /// Get available versions from GitHub releases
+    /// Retrieves a list of available release versions from the configured GitHub repository.
+    ///
+    /// Sends a request to the GitHub releases API and returns the tag names of all releases as a vector of strings.
+    ///
+    /// # Returns
+    /// A vector of release tag names on success.
+    ///
+    /// # Errors
+    /// Returns an error if the HTTP request fails or if the response cannot be parsed.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let runner = BaseGitHubRunner::new(config, cellar_runners_path);
+    /// let versions = tokio_test::block_on(runner.get_github_versions()).unwrap();
+    /// assert!(!versions.is_empty());
+    /// ```
     pub async fn get_github_versions(&self) -> Result<Vec<String>> {
         let client = reqwest::Client::builder()
             .user_agent(&self.config.user_agent)
@@ -155,7 +210,19 @@ impl BaseGitHubRunner {
         Ok(versions)
     }
 
-    /// Common runner deletion logic
+    /// Deletes the specified runner directory and its contents.
+    ///
+    /// Returns an error if the path does not exist, is not a directory, or if deletion fails.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::path::Path;
+    /// # async fn example(runner: &BaseGitHubRunner, path: &Path) {
+    /// let result = runner.delete_runner_common(path).await;
+    /// assert!(result.is_ok());
+    /// # }
+    /// ```
     pub async fn delete_runner_common(&self, runner_path: &Path) -> Result<()> {
         if !runner_path.exists() {
             return Err(anyhow!(

@@ -11,6 +11,22 @@ pub struct ProtonManager {
 }
 
 impl ProtonManager {
+    /// Creates a new `ProtonManager` instance configured for managing Proton runners.
+    ///
+    /// Initializes the manager with the provided cellar runners path and attempts to locate the Steam installation directory. Sets up a GitHub runner configuration targeting the "GloriousEggroll/proton-ge-custom" repository, filtering for `.tar.gz` assets and limiting downloads to 2GB.
+    ///
+    /// # Parameters
+    /// - `cellar_runners_path`: The base directory where Proton runners will be managed.
+    ///
+    /// # Returns
+    /// A new `ProtonManager` instance ready for runner discovery, download, and installation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let cellar_path = std::path::PathBuf::from("/home/user/.local/share/cellar/runners");
+    /// let manager = ProtonManager::new(cellar_path);
+    /// ```
     pub fn new(cellar_runners_path: PathBuf) -> Self {
         let steam_path = Self::find_steam_path();
 
@@ -85,6 +101,21 @@ impl ProtonManager {
         Ok(runners)
     }
 
+    /// Discovers Proton runners installed in the cellar directory.
+    ///
+    /// Searches the `proton` subdirectory under the cellar runners path for directories containing a `proton` executable. Returns a list of detected Proton runners with their names, versions, and paths.
+    ///
+    /// # Returns
+    /// A vector of `Runner` instances representing Proton runners found in the cellar.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let runners = manager.discover_cellar_proton().await?;
+    /// for runner in runners {
+    ///     println!("Found Proton runner: {} at {:?}", runner.version, runner.path);
+    /// }
+    /// ```
     pub async fn discover_cellar_proton(&self) -> Result<Vec<Runner>> {
         let mut runners = Vec::new();
         let proton_path = self.base_runner.cellar_runners_path.join("proton");
@@ -119,6 +150,19 @@ impl ProtonManager {
         Ok(runners)
     }
 
+    /// Extracts the version number from a Proton runner name.
+    ///
+    /// Attempts to parse and return the version component from strings such as "GE-Proton8-32" or "Proton 8.0".
+    /// If no recognizable version is found, returns the original name unchanged.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let manager = ProtonManager::new(PathBuf::from("/tmp"));
+    /// assert_eq!(manager.extract_version_from_name("GE-Proton8-32"), "8-32");
+    /// assert_eq!(manager.extract_version_from_name("Proton 8.0"), "8.0");
+    /// assert_eq!(manager.extract_version_from_name("CustomRunner"), "CustomRunner");
+    /// ```
     fn extract_version_from_name(&self, name: &str) -> String {
         // Extract version from names like "GE-Proton8-32" or "Proton 8.0"
         if let Some(captures) = Regex::new(r"(?i)proton[^\d]*(\d+(?:[.-]\d+)*)")
@@ -133,12 +177,51 @@ impl ProtonManager {
         }
     }
 
+    /// Downloads the specified version of Proton GE from GitHub.
+    ///
+    /// Returns the path to the downloaded archive upon success.
+    ///
+    /// # Arguments
+    ///
+    /// * `version` - The Proton GE version to download.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let manager = ProtonManager::new(cellar_path);
+    /// let archive_path = manager.download_ge_proton("GE-Proton8-32").await?;
+    /// assert!(archive_path.exists());
+    /// ```
     pub async fn download_ge_proton(&self, version: &str) -> Result<PathBuf> {
         self.base_runner
             .download_from_github(version, "GE-Proton")
             .await
     }
 
+    /// Extracts a Proton archive to the cellar runners directory under the specified version.
+    ///
+    /// The archive at `archive_path` (a `.tar.gz` file) is extracted to a temporary directory,
+    /// then its contents are moved to `<cellar_runners_path>/proton/<version>`. Temporary files
+    /// and the original archive are deleted after extraction.
+    ///
+    /// # Arguments
+    ///
+    /// * `archive_path` - Path to the Proton `.tar.gz` archive to extract.
+    /// * `version` - Version string used to name the destination directory.
+    ///
+    /// # Returns
+    ///
+    /// The path to the extracted Proton runner directory.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let extracted_path = manager.extract_proton(
+    ///     Path::new("/tmp/GE-Proton8-32.tar.gz"),
+    ///     "GE-Proton8-32"
+    /// ).await?;
+    /// assert!(extracted_path.ends_with("proton/GE-Proton8-32"));
+    /// ```
     pub async fn extract_proton(&self, archive_path: &Path, version: &str) -> Result<PathBuf> {
         let proton_dir = self.base_runner.cellar_runners_path.join("proton");
         fs::create_dir_all(&proton_dir).await?;
@@ -216,6 +299,20 @@ impl RunnerManager for ProtonManager {
         self.download_ge_proton(version).await
     }
 
+    /// Installs a Proton runner by extracting the downloaded archive to the appropriate location.
+    ///
+    /// The version is inferred from the archive filename by removing the `.tar.gz` extension.
+    ///
+    /// # Arguments
+    ///
+    /// * `download_path` - Path to the downloaded Proton archive.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let archive = Path::new("/tmp/GE-Proton8-32.tar.gz");
+    /// manager.install_runner(archive, Path::new("unused")).await?;
+    /// ```
     async fn install_runner(&self, download_path: &Path, _install_path: &Path) -> Result<()> {
         // Extract version from download path filename
         let filename = download_path
@@ -229,10 +326,36 @@ impl RunnerManager for ProtonManager {
         Ok(())
     }
 
+    /// Retrieves a list of available Proton GE versions from the configured GitHub repository.
+    ///
+    /// # Returns
+    ///
+    /// A vector of version strings representing available Proton GE releases.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let manager = ProtonManager::new(cellar_path);
+    /// let versions = tokio_test::block_on(manager.get_available_versions()).unwrap();
+    /// assert!(!versions.is_empty());
+    /// ```
     async fn get_available_versions(&self) -> Result<Vec<String>> {
         self.base_runner.get_github_versions().await
     }
 
+    /// Deletes the specified Proton runner directory.
+    ///
+    /// Removes the runner at the given path using the base runner's deletion logic.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::path::Path;
+    /// # async fn example(manager: &ProtonManager) {
+    /// let runner_path = Path::new("/path/to/runner");
+    /// manager.delete_runner(runner_path).await.unwrap();
+    /// # }
+    /// ```
     async fn delete_runner(&self, runner_path: &Path) -> Result<()> {
         self.base_runner.delete_runner_common(runner_path).await
     }

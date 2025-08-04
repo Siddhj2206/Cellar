@@ -105,7 +105,21 @@ impl GameLauncher {
         Ok(proton_runner.path.clone())
     }
 
-    /// Execute the launch command with proper environment and error handling
+    /// Executes a launch command, choosing between direct or shell execution based on argument format.
+    ///
+    /// If the first argument appears to be an environment variable assignment, the command is executed via a shell to ensure proper environment setup. Otherwise, the command is executed directly. Handles environment and error processing as appropriate.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use your_crate::{GameLauncher, LaunchCommand};
+    /// # async fn run() -> anyhow::Result<()> {
+    /// let launcher = GameLauncher::default();
+    /// let command = LaunchCommand { command: vec!["/usr/bin/echo".to_string(), "Hello".to_string()], environment: Default::default() };
+    /// launcher.execute_launch_command(&command).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     async fn execute_launch_command(&self, launch_command: &LaunchCommand) -> Result<()> {
         let args = &launch_command.command;
 
@@ -121,7 +135,18 @@ impl GameLauncher {
         }
     }
 
-    /// Execute command directly without shell
+    /// Executes a launch command directly without invoking a shell.
+    ///
+    /// Spawns the specified program with provided arguments and environment variables, inheriting standard output and capturing standard error. Waits for the process to complete and handles its output, returning an error if critical issues are detected.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn example(launcher: &GameLauncher, launch_command: &LaunchCommand) {
+    /// let result = launcher.execute_direct_command(launch_command).await;
+    /// assert!(result.is_ok());
+    /// # }
+    /// ```
     async fn execute_direct_command(&self, launch_command: &LaunchCommand) -> Result<()> {
         let command = &launch_command.command;
         let program = &command[0];
@@ -150,7 +175,17 @@ impl GameLauncher {
         self.handle_command_output(child).await
     }
 
-    /// Execute command through shell for complex command lines
+    /// Executes a launch command using the system shell, allowing for complex command lines and argument quoting.
+    ///
+    /// The command is run via `sh -c`, with environment variables and working directory set as specified in the launch command.
+    /// Filters and prints relevant environment variables before execution. Handles process output and error reporting asynchronously.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Assume `launcher` is a GameLauncher and `launch_command` is a valid LaunchCommand.
+    /// launcher.execute_shell_command(&launch_command).await?;
+    /// ```
     async fn execute_shell_command(&self, launch_command: &LaunchCommand) -> Result<()> {
         let args = &launch_command.command;
         let command_line = self.shell_quote_command(args);
@@ -176,7 +211,20 @@ impl GameLauncher {
         self.handle_command_output(child).await
     }
 
-    /// Print interesting environment variables
+    /// Prints selected environment variables relevant to Wine, Proton, DXVK, and game execution.
+    ///
+    /// Filters and displays environment variables whose keys start with `WINE`, `PROTON`, `DXVK`, `GAMEID`, or `HOST_LC_ALL`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut env = std::collections::HashMap::new();
+    /// env.insert("WINEPREFIX".to_string(), "/home/user/.wine".to_string());
+    /// env.insert("PATH".to_string(), "/usr/bin".to_string());
+    /// let launcher = GameLauncher::default();
+    /// launcher.print_environment_variables(&env);
+    /// // Output will include only the WINEPREFIX variable.
+    /// ```
     fn print_environment_variables(&self, environment: &std::collections::HashMap<String, String>) {
         let interesting_env_vars: Vec<_> = environment
             .iter()

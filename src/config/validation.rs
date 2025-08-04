@@ -3,6 +3,18 @@ use std::path::Path;
 
 use super::game::GameConfig;
 
+/// Validates a game configuration for correctness.
+///
+/// Checks that the game name and Proton version are not empty, the executable path exists, and the wine prefix's parent directory exists. If gamescope is enabled, its configuration is validated. The desktop configuration is always validated.
+///
+/// Returns an error if any validation fails; otherwise returns `Ok(())`.
+///
+/// # Examples
+///
+/// ```
+/// let config = GameConfig::example_valid();
+/// assert!(validate_game_config(&config).is_ok());
+/// ```
 pub fn validate_game_config(config: &GameConfig) -> Result<()> {
     // Validate game name
     if config.game.name.is_empty() {
@@ -47,6 +59,27 @@ pub fn validate_game_config(config: &GameConfig) -> Result<()> {
     Ok(())
 }
 
+/// Validates a Gamescope configuration for correctness.
+///
+/// Ensures that all required Gamescope settings are set to valid, non-zero values and that the upscaling method is recognized.
+///
+/// # Errors
+///
+/// Returns an error if any dimension or refresh rate is zero, or if the upscaling method is not one of the accepted values.
+///
+/// # Examples
+///
+/// ```
+/// let config = GamescopeConfig {
+///     width: 1920,
+///     height: 1080,
+///     output_width: 1920,
+///     output_height: 1080,
+///     refresh_rate: 60,
+///     upscaling: "fsr".to_string(),
+/// };
+/// assert!(validate_gamescope_config(&config).is_ok());
+/// ```
 fn validate_gamescope_config(config: &super::game::GamescopeConfig) -> Result<()> {
     if config.width == 0 || config.height == 0 {
         return Err(anyhow!("Gamescope width and height must be greater than 0"));

@@ -113,6 +113,16 @@ pub struct InstallationInfo {
 }
 
 // Default value functions
+/// Returns `true`.
+///
+/// Useful as a default value provider for boolean fields in configuration structs.
+///
+/// # Examples
+///
+/// ```
+/// let value = default_true();
+/// assert!(value);
+/// ```
 fn default_true() -> bool {
     true
 }
@@ -171,6 +181,10 @@ impl Default for WineConfig {
 }
 
 impl Default for GamescopeConfig {
+    /// Returns a `GamescopeConfig` instance with default settings.
+    ///
+    /// The default configuration disables Gamescope, sets resolution to 1920x1080, refresh rate to 60 Hz,
+    /// upscaling to "fsr", enables fullscreen, and disables all optional features.
     fn default() -> Self {
         Self {
             enabled: false,
@@ -191,6 +205,16 @@ impl Default for GamescopeConfig {
 }
 
 impl Default for DesktopConfig {
+    /// Returns a `DesktopConfig` instance with default desktop integration settings for a Windows game.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let config = DesktopConfig::default();
+    /// assert!(config.create_shortcut);
+    /// assert_eq!(config.categories, vec!["Game"]);
+    /// assert_eq!(config.comment, "Windows game via Cellar");
+    /// ```
     fn default() -> Self {
         Self {
             create_shortcut: true,

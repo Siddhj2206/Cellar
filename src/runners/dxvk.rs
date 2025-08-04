@@ -10,6 +10,16 @@ pub struct DxvkManager {
 }
 
 impl DxvkManager {
+    /// Creates a new `DxvkManager` for managing DXVK runners in the specified cellar directory.
+    ///
+    /// Configures the manager to interact with the "doitsujin/dxvk" GitHub repository, filtering for non-source `.tar.gz` release assets up to 1GB in size.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let cellar_path = std::path::PathBuf::from("/path/to/cellar/runners");
+    /// let manager = DxvkManager::new(cellar_path);
+    /// ```
     pub fn new(cellar_runners_path: PathBuf) -> Self {
         fn asset_filter(name: &str) -> bool {
             name.ends_with(".tar.gz") && !name.contains("source")
@@ -28,6 +38,24 @@ impl DxvkManager {
         Self { base_runner }
     }
 
+    /// Discovers locally installed DXVK runners in the cellar directory.
+    ///
+    /// Searches the `dxvk` subdirectory of the cellar runners path for valid DXVK installations,
+    /// identified by the presence of `x64` or `x32` subdirectories. Returns a list of `Runner`
+    /// instances representing each discovered DXVK installation.
+    ///
+    /// # Returns
+    /// A vector of `Runner` objects for each detected DXVK installation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let manager = DxvkManager::new(cellar_path);
+    /// let runners = tokio_test::block_on(manager.discover_cellar_dxvk()).unwrap();
+    /// for runner in runners {
+    ///     assert_eq!(runner.runner_type, RunnerType::Dxvk);
+    /// }
+    /// ```
     pub async fn discover_cellar_dxvk(&self) -> Result<Vec<Runner>> {
         let mut runners = Vec::new();
         let dxvk_path = self.base_runner.cellar_runners_path.join("dxvk");
@@ -63,6 +91,23 @@ impl DxvkManager {
         Ok(runners)
     }
 
+    /// Extracts the version number from a DXVK release name.
+    ///
+    /// Searches for a version pattern (e.g., "v2.3.1" or "dxvk-2.3.1") in the input string and returns the version number.
+    /// If no version pattern is found, returns the original string.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let version = manager.extract_version_from_name("dxvk-2.3.1");
+    /// assert_eq!(version, "2.3.1");
+    ///
+    /// let version = manager.extract_version_from_name("v1.10");
+    /// assert_eq!(version, "1.10");
+    ///
+    /// let version = manager.extract_version_from_name("unknown");
+    /// assert_eq!(version, "unknown");
+    /// ```
     fn extract_version_from_name(&self, name: &str) -> String {
         // Extract version from names like "v2.3.1" or "dxvk-2.3.1"
         if let Some(captures) = Regex::new(r"v?(\d+\.\d+(?:\.\d+)?)")
@@ -77,10 +122,40 @@ impl DxvkManager {
         }
     }
 
+    /// Downloads the specified version of DXVK from GitHub.
+    ///
+    /// Returns the path to the downloaded archive on success.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let manager = DxvkManager::new(cellar_path);
+    /// let archive_path = manager.download_dxvk("2.3.1").await?;
+    /// assert!(archive_path.ends_with(".tar.gz"));
+    /// ```
     pub async fn download_dxvk(&self, version: &str) -> Result<PathBuf> {
         self.base_runner.download_from_github(version, "v").await
     }
 
+    /// Extracts a DXVK `.tar.gz` archive to the cellar directory for the specified version.
+    ///
+    /// The archive is first unpacked to a temporary directory, then its contents are moved to the final extraction path under `dxvk/v{version}` in the cellar. Temporary files and the original archive are deleted after extraction.
+    ///
+    /// # Arguments
+    ///
+    /// * `archive_path` - Path to the DXVK `.tar.gz` archive.
+    /// * `version` - Version string used to determine the extraction directory.
+    ///
+    /// # Returns
+    ///
+    /// The path to the extracted DXVK directory.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let extracted_path = manager.extract_dxvk(Path::new("/tmp/dxvk-2.3.1.tar.gz"), "2.3.1").await?;
+    /// assert!(extracted_path.ends_with("dxvk/v2.3.1"));
+    /// ```
     pub async fn extract_dxvk(&self, archive_path: &Path, version: &str) -> Result<PathBuf> {
         let dxvk_dir = self.base_runner.cellar_runners_path.join("dxvk");
         fs::create_dir_all(&dxvk_dir).await?;
@@ -187,6 +262,21 @@ impl RunnerManager for DxvkManager {
         self.download_dxvk(version).await
     }
 
+    /// Installs a DXVK runner by extracting the downloaded archive to the appropriate location.
+    ///
+    /// Extracts the version from the archive filename and unpacks the contents using `extract_dxvk`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the download path is invalid or extraction fails.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let manager = DxvkManager::new(cellar_path);
+    /// let archive = Path::new("/tmp/dxvk-v2.3.1.tar.gz");
+    /// manager.install_runner(archive, Path::new("")).await?;
+    /// ```
     async fn install_runner(&self, download_path: &Path, _install_path: &Path) -> Result<()> {
         // Extract version from download path filename
         let filename = download_path
@@ -208,6 +298,18 @@ impl RunnerManager for DxvkManager {
         Ok(())
     }
 
+    /// Retrieves a list of available DXVK versions from GitHub, with leading 'v' prefixes removed.
+    ///
+    /// # Returns
+    /// A vector of version strings without the leading 'v' character.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let manager = DxvkManager::new(cellar_path);
+    /// let versions = tokio_test::block_on(manager.get_available_versions()).unwrap();
+    /// assert!(versions.iter().all(|v| !v.starts_with('v')));
+    /// ```
     async fn get_available_versions(&self) -> Result<Vec<String>> {
         let versions = self.base_runner.get_github_versions().await?;
         // Strip 'v' prefix from versions for consistency
@@ -218,6 +320,18 @@ impl RunnerManager for DxvkManager {
         Ok(stripped_versions)
     }
 
+    /// Deletes the specified DXVK runner directory and its contents asynchronously.
+    ///
+    /// # Arguments
+    ///
+    /// * `runner_path` - Path to the runner directory to be deleted.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let manager = DxvkManager::new(cellar_path);
+    /// manager.delete_runner(Path::new("/path/to/runner")).await?;
+    /// ```
     async fn delete_runner(&self, runner_path: &Path) -> Result<()> {
         self.base_runner.delete_runner_common(runner_path).await
     }

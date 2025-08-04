@@ -3,7 +3,33 @@ use std::path::{Path, PathBuf};
 
 use crate::utils::fs::CellarDirectories;
 
-/// Extract icon from executable using wrestool and convert to PNG using ImageMagick
+/// Extracts the icon from an executable file and converts it to PNG format.
+///
+/// This function uses `wrestool` to extract the icon resource from the specified executable,
+/// then converts the extracted ICO file to PNG format using ImageMagick's `magick` command.
+/// The resulting PNG icon is stored in the application's icon directory, and the intermediate
+/// ICO file is removed after conversion.
+///
+/// # Arguments
+///
+/// * `exe_path` - Path to the executable file from which to extract the icon.
+/// * `game_name` - Name used to identify and store the icon files.
+///
+/// # Returns
+///
+/// Returns the path to the generated PNG icon file on success.
+///
+/// # Errors
+///
+/// Returns an error if required tools are missing, extraction or conversion fails, or file operations fail.
+///
+/// # Examples
+///
+/// ```
+/// let exe_path = std::path::Path::new("/path/to/game.exe");
+/// let png_icon = extract_and_convert_icon(exe_path, "my_game").await?;
+/// assert!(png_icon.ends_with("my_game.png"));
+/// ```
 pub async fn extract_and_convert_icon(exe_path: &Path, game_name: &str) -> Result<PathBuf> {
     let dirs = CellarDirectories::new()?;
     dirs.ensure_all_exist()?;
@@ -29,7 +55,17 @@ pub async fn extract_and_convert_icon(exe_path: &Path, game_name: &str) -> Resul
     Ok(png_path)
 }
 
-/// Check if wrestool and magick commands are available
+/// Asynchronously verifies that the `wrestool` and `magick` commands are available in the system path.
+///
+/// Returns an error if either tool is not found.
+///
+/// # Examples
+///
+/// ```
+/// tokio_test::block_on(async {
+///     check_required_tools().expect("Required tools should be installed");
+/// });
+/// ```
 async fn check_required_tools() -> Result<()> {
     // Check for wrestool
     let wrestool_check = tokio::process::Command::new("which")
@@ -58,7 +94,21 @@ async fn check_required_tools() -> Result<()> {
     Ok(())
 }
 
-/// Extract icon from executable using wrestool
+/// Extracts the icon resource from an executable file using `wrestool`.
+///
+/// Attempts to extract the icon (resource type 14) from the specified executable and writes it to the given output path. Returns an error if extraction fails or if no icon is found.
+///
+/// # Examples
+///
+/// ```
+/// # use std::path::Path;
+/// # tokio_test::block_on(async {
+/// let exe_path = Path::new("game.exe");
+/// let output_path = Path::new("icon.ico");
+/// let result = extract_icon_with_wrestool(exe_path, output_path).await;
+/// assert!(result.is_ok() || result.is_err());
+/// # });
+/// ```
 async fn extract_icon_with_wrestool(exe_path: &Path, output_path: &Path) -> Result<()> {
     let output = tokio::process::Command::new("wrestool")
         .arg("-x")
@@ -90,7 +140,30 @@ async fn extract_icon_with_wrestool(exe_path: &Path, output_path: &Path) -> Resu
     Ok(())
 }
 
-/// Convert ICO file to PNG using ImageMagick
+/// Converts an ICO file to PNG format using ImageMagick.
+///
+/// Uses the highest resolution icon from the ICO file for conversion.
+///
+/// # Arguments
+///
+/// * `ico_path` - Path to the source ICO file.
+/// * `png_path` - Path where the resulting PNG file will be saved.
+///
+/// # Errors
+///
+/// Returns an error if the conversion fails or if ImageMagick is not available.
+///
+/// # Examples
+///
+/// ```
+/// # use std::path::Path;
+/// # tokio_test::block_on(async {
+/// let ico = Path::new("icon.ico");
+/// let png = Path::new("icon.png");
+/// convert_ico_to_png(ico, png).await.unwrap();
+/// assert!(png.exists());
+/// # });
+/// ```
 async fn convert_ico_to_png(ico_path: &Path, png_path: &Path) -> Result<()> {
     // Use [0] to get the highest resolution icon from the ICO file
     let ico_input = format!("{}[0]", ico_path.display());
@@ -113,7 +186,29 @@ async fn convert_ico_to_png(ico_path: &Path, png_path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Get icon path for a game, extracting if necessary
+/// Returns the PNG icon path for a game, extracting it from the executable if not already present.
+///
+/// If the PNG icon for the specified game exists, returns its path. Otherwise, attempts to extract and convert the icon from the provided executable. If extraction fails, returns `None`.
+///
+/// # Arguments
+///
+/// * `exe_path` - Path to the game's executable file.
+/// * `game_name` - Name of the game, used to determine icon file naming.
+///
+/// # Returns
+///
+/// An `Option<PathBuf>` containing the path to the PNG icon if available or successfully extracted, or `None` if extraction fails.
+///
+/// # Examples
+///
+/// ```
+/// let icon_path = get_or_extract_icon(Path::new("game.exe"), "MyGame").await?;
+/// if let Some(path) = icon_path {
+///     // Use the icon at `path`
+/// } else {
+///     // Fallback to a default icon
+/// }
+/// ```
 pub async fn get_or_extract_icon(exe_path: &Path, game_name: &str) -> Result<Option<PathBuf>> {
     let dirs = CellarDirectories::new()?;
     let png_path = dirs.get_game_icon_path(game_name, "png");
@@ -141,7 +236,13 @@ pub async fn get_or_extract_icon(exe_path: &Path, game_name: &str) -> Result<Opt
     }
 }
 
-/// Remove icon files for a game
+/// Deletes both ICO and PNG icon files associated with the specified game, if they exist.
+///
+/// # Examples
+///
+/// ```
+/// remove_game_icons("ExampleGame")?;
+/// ```
 pub fn remove_game_icons(game_name: &str) -> Result<()> {
     let dirs = CellarDirectories::new()?;
 
@@ -161,7 +262,19 @@ pub fn remove_game_icons(game_name: &str) -> Result<()> {
     Ok(())
 }
 
-/// List all extracted game icons
+/// Returns a sorted list of game names for which PNG icons have been extracted.
+///
+/// Scans the icons directory for `.png` files and extracts the corresponding game names by removing the file extension.
+///
+/// # Returns
+/// A sorted vector of game names as strings.
+///
+/// # Examples
+///
+/// ```
+/// let icons = list_game_icons().unwrap();
+/// assert!(icons.contains(&"my_game".to_string()));
+/// ```
 pub fn list_game_icons() -> Result<Vec<String>> {
     let dirs = CellarDirectories::new()?;
     let mut icons = Vec::new();

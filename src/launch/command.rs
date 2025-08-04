@@ -23,7 +23,17 @@ impl CommandBuilder {
         self
     }
 
-    /// Build the complete launch command with all components
+    /// Constructs the full launch command, including environment variables and all configured wrappers.
+    ///
+    /// Builds the base command, applies Wine and DXVK environment variables, processes launch options with `%command%` placeholders, and wraps the command with mangohud, gamescope, and gamemode as configured. Returns a `LaunchCommand` containing the final command vector, environment, and working directory.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let builder = CommandBuilder::new(game_config).with_proton_path(proton_path);
+    /// let launch_cmd = builder.build().unwrap();
+    /// assert!(launch_cmd.command.contains(&"umu-run".to_string()));
+    /// ```
     pub fn build(&self) -> Result<LaunchCommand> {
         // First, build the base umu-run command
         let base_command = self.build_base_command()?;
@@ -110,7 +120,21 @@ impl CommandBuilder {
         Ok(env)
     }
 
-    /// Build DXVK-specific environment variables
+    /// Constructs a map of DXVK-related environment variables based on the game configuration.
+    ///
+    /// Sets variables such as `DXVK_HUD`, `DXVK_ASYNC`, and `DXVK_STATE_CACHE_PATH` if DXVK is enabled in the configuration.
+    ///
+    /// # Returns
+    /// A map containing DXVK environment variables, or an empty map if DXVK is not enabled.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let env = builder.build_dxvk_environment().unwrap();
+    /// if builder.config.wine_config.dxvk {
+    ///     assert!(env.contains_key("DXVK_HUD"));
+    /// }
+    /// ```
     fn build_dxvk_environment(&self) -> Result<HashMap<String, String>> {
         let mut env = HashMap::new();
 
@@ -138,7 +162,24 @@ impl CommandBuilder {
         Ok(env)
     }
 
-    /// Process Steam-style launch options with %command% placeholder
+    /// Processes launch options, replacing the `%command%` placeholder with the base command and applying optional wrappers.
+    ///
+    /// Parses the configured launch options, replaces the `%command%` placeholder with the provided base command, and applies the mangohud, gamescope, and gamemode wrappers in order. If no `%command%` placeholder is found, the base command is appended at the end. Returns an error if multiple `%command%` placeholders are present.
+    ///
+    /// # Returns
+    /// A vector of strings representing the fully processed and wrapped command.
+    ///
+    /// # Errors
+    /// Returns an error if multiple `%command%` placeholders are found in the launch options.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let builder = CommandBuilder::new(config);
+    /// let base_cmd = vec!["game_exe".to_string()];
+    /// let processed = builder.process_launch_options(base_cmd, &std::collections::HashMap::new())?;
+    /// assert!(processed.contains(&"game_exe".to_string()));
+    /// ```
     fn process_launch_options(
         &self,
         base_command: Vec<String>,
@@ -187,7 +228,17 @@ impl CommandBuilder {
         Ok(gamemode_wrapped)
     }
 
-    /// Parse launch options string into tokens, handling quotes and environment variables safely
+    /// Parses a launch options string into sanitized tokens, respecting quoted substrings and validating each token for safety.
+    ///
+    /// Returns a vector of sanitized tokens. Errors if quotes are unclosed or if any token is deemed unsafe.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let builder = CommandBuilder::new(config);
+    /// let tokens = builder.parse_launch_options(r#"-fullscreen "custom arg" 1920x1080"#).unwrap();
+    /// assert_eq!(tokens, vec!["-fullscreen", "custom arg", "1920x1080"]);
+    /// ```
     fn parse_launch_options(&self, launch_options: &str) -> Result<Vec<String>> {
         let mut tokens = Vec::new();
         let mut current_token = String::new();
@@ -228,7 +279,21 @@ impl CommandBuilder {
         Ok(tokens)
     }
 
-    /// Sanitize a command token to prevent shell injection
+    /// Validates and sanitizes a command token to prevent shell injection or unsafe execution.
+    ///
+    /// Rejects tokens containing dangerous characters, patterns, or unapproved option prefixes. Only allows tokens that are free of shell metacharacters, path traversal, and unsafe command-line options. Returns the sanitized token if it is deemed safe.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the token contains unsafe characters, patterns, or disallowed option prefixes.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let builder = CommandBuilder::new(config);
+    /// assert!(builder.sanitize_token("safe_token").is_ok());
+    /// assert!(builder.sanitize_token("rm -rf /").is_err());
+    /// ```
     fn sanitize_token(&self, token: &str) -> Result<String> {
         // Check for dangerous characters and patterns
         let dangerous_chars = [
@@ -272,7 +337,19 @@ impl CommandBuilder {
         Ok(token.to_string())
     }
 
-    /// Check if an option is in the allowlist of safe options
+    /// Determines if a command-line option is considered safe for inclusion in a launch command.
+    ///
+    /// Returns `true` if the option is in the predefined allowlist of safe options, is a numeric value,
+    /// or matches a resolution pattern like "1920x1080". Otherwise, returns `false`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let builder = CommandBuilder::new(config);
+    /// assert!(builder.is_safe_option("--fullscreen"));
+    /// assert!(builder.is_safe_option("1920x1080"));
+    /// assert!(!builder.is_safe_option("--dangerous"));
+    /// ```
     fn is_safe_option(&self, option: &str) -> bool {
         // Allowlist of safe command line options
         let safe_options = [
@@ -311,7 +388,18 @@ impl CommandBuilder {
         option.matches('x').count() == 1 && option.split('x').all(|s| s.parse::<u32>().is_ok())
     }
 
-    /// Wrap command with mangohud if enabled (but not when gamescope is enabled)
+    /// Prepends "mangohud" to the command if MangoHUD is enabled and Gamescope is not enabled.
+    ///
+    /// Returns the original command unchanged if MangoHUD is disabled or Gamescope is enabled.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let builder = CommandBuilder::new(config_with_mangohud_enabled());
+    /// let command = vec!["game_executable".to_string()];
+    /// let wrapped = builder.wrap_with_mangohud(command).unwrap();
+    /// assert_eq!(wrapped[0], "mangohud");
+    /// ```
     fn wrap_with_mangohud(&self, command: Vec<String>) -> Result<Vec<String>> {
         if !self.config.launch.mangohud || self.config.gamescope.enabled {
             return Ok(command);
@@ -322,7 +410,22 @@ impl CommandBuilder {
         Ok(mangohud_cmd)
     }
 
-    /// Wrap command with gamescope if enabled
+    /// Wraps the given command with the gamescope compositor and its configured options if enabled.
+    ///
+    /// Prepends the "gamescope" executable and its flags for resolution, refresh rate, upscaling, and display options based on the current configuration. If mangohud is enabled, adds the `--mangoapp` flag. The original command is appended after a `--` separator. Returns the wrapped command vector, or the original command if gamescope is not enabled.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the configured upscaling method is invalid.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let builder = CommandBuilder::new(config_with_gamescope_enabled());
+    /// let base_cmd = vec!["game_executable".to_string()];
+    /// let wrapped = builder.wrap_with_gamescope(base_cmd).unwrap();
+    /// assert!(wrapped[0] == "gamescope");
+    /// ```
     fn wrap_with_gamescope(&self, command: Vec<String>) -> Result<Vec<String>> {
         if !self.config.gamescope.enabled {
             return Ok(command);
@@ -413,7 +516,18 @@ impl CommandBuilder {
         Ok(gamescope_cmd)
     }
 
-    /// Wrap command with gamemode if enabled
+    /// Prepends "gamemoderun" to the command if Gamemode is enabled in the configuration.
+    ///
+    /// Returns the original command unchanged if Gamemode is not enabled.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let builder = CommandBuilder::new(config_with_gamemode_enabled());
+    /// let command = vec!["game_executable".to_string()];
+    /// let wrapped = builder.wrap_with_gamemode(command).unwrap();
+    /// assert_eq!(wrapped[0], "gamemoderun");
+    /// ```
     fn wrap_with_gamemode(&self, command: Vec<String>) -> Result<Vec<String>> {
         if !self.config.launch.gamemode {
             return Ok(command);
@@ -438,6 +552,16 @@ mod tests {
     use super::*;
     use crate::config::game::*;
 
+    /// Creates a sample `GameConfig` instance for testing purposes.
+    ///
+    /// The returned configuration includes preset values for game information, launch options, and default settings for Wine, DXVK, Gamescope, and desktop configurations.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let config = create_test_config();
+    /// assert_eq!(config.game.name, "Test Game");
+    /// ```
     fn create_test_config() -> GameConfig {
         GameConfig {
             game: GameInfo {

@@ -19,6 +19,18 @@ struct Cli {
     command: Commands,
 }
 
+/// Entry point for the "cellar" command-line application.
+///
+/// Parses command-line arguments and dispatches subcommands for managing games, prefixes, runners, and shortcuts. Executes the appropriate handler for each subcommand and propagates errors if any occur.
+///
+/// # Examples
+///
+/// ```
+/// // Run the application from the command line:
+/// // $ cellar add --name "Game" --exe "/path/to/game.exe"
+/// // $ cellar list
+/// // $ cellar launch --name "Game"
+/// ```
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();

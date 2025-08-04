@@ -2,7 +2,31 @@ use anyhow::{anyhow, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Expand tilde (~) in paths to the actual home directory
+/// Expands a path beginning with `~` or `~/` to the user's home directory.
+///
+/// If the input path starts with `~/`, it is replaced with the user's home directory joined with the remainder of the path. If the path is exactly `"~"`, it is replaced with the home directory. All other paths are returned unchanged.
+///
+/// # Errors
+///
+/// Returns an error if the user's home directory cannot be determined.
+///
+/// # Examples
+///
+/// ```
+/// let home = dirs::home_dir().unwrap();
+/// assert_eq!(
+///     expand_tilde("~/mydir").unwrap(),
+///     home.join("mydir")
+/// );
+/// assert_eq!(
+///     expand_tilde("~").unwrap(),
+///     home
+/// );
+/// assert_eq!(
+///     expand_tilde("/tmp/foo").unwrap(),
+///     PathBuf::from("/tmp/foo")
+/// );
+/// ```
 pub fn expand_tilde<P: AsRef<Path>>(path: P) -> Result<PathBuf> {
     let path = path.as_ref();
     let path_str = path.to_string_lossy();
@@ -30,6 +54,20 @@ pub struct CellarDirectories {
 }
 
 impl CellarDirectories {
+    /// Creates a new `CellarDirectories` instance with paths initialized relative to the user's home directory.
+    ///
+    /// The base cellar directory is set to `~/.local/share/cellar`, with subdirectories for runners, prefixes, configs, icons, and cache. The applications directory is set to `~/.local/share/applications`.
+    ///
+    /// # Returns
+    ///
+    /// A `CellarDirectories` struct with all directory paths set. Returns an error if the home directory cannot be determined.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let dirs = CellarDirectories::new().unwrap();
+    /// assert!(dirs.base_dir.ends_with(".local/share/cellar"));
+    /// ```
     pub fn new() -> Result<Self> {
         let home_dir =
             dirs::home_dir().ok_or_else(|| anyhow!("Unable to determine home directory"))?;
@@ -51,6 +89,13 @@ impl CellarDirectories {
         Ok(dirs)
     }
 
+    /// Ensures that all required cellar directories and key subdirectories exist, creating them if necessary.
+    ///
+    /// This includes the main cellar directories as well as the `proton` and `dxvk` subdirectories under the runners directory.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any directory cannot be created.
     pub fn ensure_all_exist(&self) -> Result<()> {
         self.ensure_dir_exists(&self.base_dir)?;
         self.ensure_dir_exists(&self.runners_dir)?;
@@ -90,6 +135,17 @@ impl CellarDirectories {
             .join(format!("{}.{}", sanitize_filename(game_name), extension))
     }
 
+    /// Returns the path to a game's desktop shortcut file in the applications directory.
+    ///
+    /// The filename is constructed as `cellar-<sanitized_game_name>.desktop`, where the game name is sanitized to be filesystem-safe.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let dirs = CellarDirectories::new().unwrap();
+    /// let shortcut_path = dirs.get_game_shortcut_path("My Game!");
+    /// assert!(shortcut_path.ends_with("cellar-my_game.desktop"));
+    /// ```
     #[allow(dead_code)]
     pub fn get_game_shortcut_path(&self, game_name: &str) -> PathBuf {
         self.applications_dir
@@ -129,6 +185,16 @@ impl CellarDirectories {
     }
 }
 
+/// Converts a string into a safe, lowercase filename by replacing invalid characters and formatting whitespace.
+///
+/// Replaces characters that are not allowed in filenames (`/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|`, and control characters) with underscores, trims whitespace, converts to lowercase, and replaces spaces with underscores.
+///
+/// # Examples
+///
+/// ```
+/// let sanitized = sanitize_filename("My Game: Deluxe Edition*");
+/// assert_eq!(sanitized, "my_game__deluxe_edition_");
+/// ```
 pub fn sanitize_filename(name: &str) -> String {
     name.chars()
         .map(|c| match c {

@@ -35,6 +35,14 @@ impl Default for RunnerCache {
 }
 
 impl RunnerCache {
+    /// Creates a new, empty `RunnerCache` with the current UTC timestamp as `last_updated`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let cache = RunnerCache::new();
+    /// assert!(cache.runners.is_empty());
+    /// ```
     pub fn new() -> Self {
         Self {
             runners: Vec::new(),
@@ -42,17 +50,78 @@ impl RunnerCache {
         }
     }
 
+    /// Adds a runner to the cache and updates the last updated timestamp.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut cache = RunnerCache::new();
+    /// let runner = Runner {
+    ///     name: "Proton".to_string(),
+    ///     version: "7.0".to_string(),
+    ///     path: std::path::PathBuf::from("/fake/path"),
+    ///     runner_type: RunnerType::Proton,
+    ///     installed: true,
+    /// };
+    /// cache.add_runner(runner);
+    /// assert_eq!(cache.runners.len(), 1);
+    /// ```
     pub fn add_runner(&mut self, runner: Runner) {
         self.runners.push(runner);
         self.last_updated = chrono::Utc::now();
     }
 
+    /// Searches for a runner by name and optional version.
+    ///
+    /// Returns a reference to the first runner matching the specified name and, if provided, version.
+    /// If no matching runner is found, returns `None`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut cache = RunnerCache::new();
+    /// let runner = Runner {
+    ///     name: "Proton".to_string(),
+    ///     version: "7.0".to_string(),
+    ///     path: std::path::PathBuf::from("/fake/path"),
+    ///     runner_type: RunnerType::Proton,
+    ///     installed: true,
+    /// };
+    /// cache.add_runner(runner);
+    /// let found = cache.find_runner("Proton", Some("7.0"));
+    /// assert!(found.is_some());
+    /// ```
     pub fn find_runner(&self, name: &str, version: Option<&str>) -> Option<&Runner> {
         self.runners
             .iter()
             .find(|r| r.name == name && (version.is_none() || version == Some(&r.version)))
     }
 
+    /// Returns all runners in the cache that match the specified runner type.
+    ///
+    /// # Parameters
+    ///
+    /// - `runner_type`: The type of runner to filter by.
+    ///
+    /// # Returns
+    ///
+    /// A vector of references to runners whose type matches the given `runner_type`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut cache = RunnerCache::new();
+    /// let runner = Runner {
+    ///     name: "Proton".to_string(),
+    ///     version: "7.0".to_string(),
+    ///     path: PathBuf::from("/fake/path"),
+    ///     runner_type: RunnerType::Proton,
+    ///     installed: true,
+    /// };
+    /// cache.add_runner(runner);
+    /// let proton_runners = cache.get_runners_by_type(RunnerType::Proton);
+    /// assert_eq!(proton_runners.len(), 1);
+    /// ```
     pub fn get_runners_by_type(&self, runner_type: RunnerType) -> Vec<&Runner> {
         self.runners
             .iter()

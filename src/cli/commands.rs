@@ -154,6 +154,37 @@ pub enum ShortcutCommands {
     ListIcons,
 }
 
+/// Adds a new game configuration and saves it to disk.
+///
+/// Validates the provided game name and executable path, creates a basic game configuration with optional Proton version and Wine prefix, and saves the configuration. Attempts to create a desktop shortcut for the game. Returns an error if required information is missing or invalid.
+///
+/// # Parameters
+/// - `name`: The display name for the game. Must not be empty.
+/// - `exe`: Path to the game's executable file. Required for basic game addition.
+/// - `installer`: Path to an installer (not yet implemented; must be `None`).
+/// - `interactive`: If `true`, would enable interactive mode (not yet implemented).
+/// - `proton`: Optional Proton version to use for the game.
+/// - `prefix`: Optional Wine prefix name or path.
+///
+/// # Errors
+/// Returns an error if the executable path is missing, does not exist, is not a file, or if the game name is empty. Also returns an error if installer mode or interactive mode is requested (not yet implemented).
+///
+/// # Examples
+///
+/// ```
+/// # use your_crate::add_game;
+/// # async fn example() -> anyhow::Result<()> {
+/// add_game(
+///     "My Game".to_string(),
+///     Some("/games/mygame/game.exe".to_string()),
+///     None,
+///     false,
+///     Some("Proton-8.0".to_string()),
+///     None,
+/// ).await?;
+/// # Ok(())
+/// # }
+/// ```
 pub async fn add_game(
     name: String,
     exe: Option<String>,
@@ -209,11 +240,39 @@ pub async fn add_game(
     Ok(())
 }
 
+/// Launches a game by its name.
+///
+/// Asynchronously starts the game specified by `name` using the configured launcher.
+///
+/// # Arguments
+///
+/// * `name` - The name of the game to launch.
+///
+/// # Errors
+///
+/// Returns an error if the launcher cannot be initialized or if the game cannot be launched.
+///
+/// # Examples
+///
+/// ```
+/// launch_game("Portal 2".to_string()).await?;
+/// ```
 pub async fn launch_game(name: String) -> Result<()> {
     let launcher = crate::launch::GameLauncher::new()?;
     launcher.launch_game_by_name(&name).await
 }
 
+/// Lists configured games or details for a specific game.
+///
+/// If a game name is provided, prints the name of that game. Otherwise, lists all configured games with their executable paths and Proton versions.
+///
+/// # Arguments
+///
+/// * `name` - Optional name of a game to display details for.
+///
+/// # Returns
+///
+/// Returns `Ok(())` if the operation succeeds, or an error if loading game configurations fails.
 pub fn list_games(name: Option<String>) -> Result<()> {
     let dirs = CellarDirectories::new()?;
 
@@ -249,6 +308,13 @@ pub fn list_games(name: Option<String>) -> Result<()> {
     Ok(())
 }
 
+/// Removes a game configuration and its associated desktop shortcut.
+///
+/// If no other games use the same Wine prefix, prompts the user to optionally delete the prefix directory. Prints warnings if shortcut or prefix removal fails, and notifies if the prefix is still in use by other games.
+///
+/// # Errors
+///
+/// Returns an error if the game configuration does not exist or if file operations fail.
 pub fn remove_game(name: String) -> Result<()> {
     let dirs = CellarDirectories::new()?;
     let config_path = dirs.get_game_config_path(&name);
@@ -298,7 +364,20 @@ pub fn remove_game(name: String) -> Result<()> {
     Ok(())
 }
 
-/// Check if other games are using the same prefix
+/// Returns a list of other games that use the same Wine prefix as the specified game.
+///
+/// Scans all game configuration files and collects the names of games (excluding the current game)
+/// whose Wine prefix path matches the provided prefix path.
+///
+/// # Arguments
+///
+/// - `dirs`: Reference to the cellar directories containing game configs.
+/// - `prefix_path`: Path to the Wine prefix to check for shared usage.
+/// - `current_game`: Name of the game to exclude from the results.
+///
+/// # Returns
+///
+/// A vector of game names that share the same Wine prefix, excluding the current game.
 fn check_other_games_using_prefix(
     dirs: &CellarDirectories,
     prefix_path: &std::path::Path,
@@ -327,7 +406,22 @@ fn check_other_games_using_prefix(
     Ok(games_using_prefix)
 }
 
-/// Prompt user for permission to delete a prefix
+/// Prompts the user to confirm deletion of a Wine prefix by name.
+///
+/// Returns `Ok(true)` if the user confirms deletion with 'y' or 'yes' (case-insensitive), otherwise returns `Ok(false)`.
+///
+/// # Arguments
+///
+/// * `prefix_name` - The name of the Wine prefix to be deleted.
+///
+/// # Examples
+///
+/// ```
+/// let should_delete = prompt_user_for_prefix_deletion("MyPrefix")?;
+/// if should_delete {
+///     // Proceed with deletion
+/// }
+/// ```
 fn prompt_user_for_prefix_deletion(prefix_name: &str) -> Result<bool> {
     use std::io::{self, Write};
 
@@ -341,6 +435,17 @@ fn prompt_user_for_prefix_deletion(prefix_name: &str) -> Result<bool> {
     Ok(input == "y" || input == "yes")
 }
 
+/// Displays detailed configuration information for a specified game.
+///
+/// Prints the game's executable path, Wine prefix, Proton and DXVK versions, Wine configuration flags, and Gamescope settings if enabled.
+///
+/// # Arguments
+///
+/// * `name` - The name of the game whose information will be displayed.
+///
+/// # Returns
+///
+/// Returns `Ok(())` if the information is displayed successfully, or an error if the game configuration cannot be loaded.
 pub fn show_game_info(name: String) -> Result<()> {
     let dirs = CellarDirectories::new()?;
     let config = load_game_config(&dirs, &name)?;
@@ -377,6 +482,35 @@ pub fn show_game_info(name: String) -> Result<()> {
     Ok(())
 }
 
+/// Asynchronously creates a basic game configuration for a Windows game.
+///
+/// Determines the appropriate Wine prefix and Proton version to use, creating the prefix if it does not exist. If a specific Proton version is requested but not installed, attempts to download and install it after user confirmation. Returns a validated `GameConfig` struct for the game.
+///
+/// # Parameters
+/// - `name`: The display name of the game. Used for prefix naming if a custom prefix is not provided.
+/// - `exe_path`: Path to the game's executable.
+/// - `dirs`: Reference to cellar directory paths for runners and prefixes.
+/// - `proton_version`: Optional Proton version to use; if not provided, the latest available is selected.
+/// - `prefix_name`: Optional custom name for the Wine prefix; if not provided, a sanitized version of the game name is used.
+///
+/// # Returns
+/// A validated `GameConfig` for the specified game.
+///
+/// # Errors
+/// Returns an error if the Proton version is unavailable and cannot be downloaded, if prefix creation fails, or if the resulting configuration is invalid.
+///
+/// # Examples
+///
+/// ```
+/// let config = create_basic_game_config(
+///     "My Game",
+///     PathBuf::from("/games/mygame.exe"),
+///     &dirs,
+///     Some("Proton-8.0"),
+///     None
+/// ).await?;
+/// assert_eq!(config.game.name, "My Game");
+/// ```
 async fn create_basic_game_config(
     name: &str,
     exe_path: PathBuf,
@@ -526,7 +660,22 @@ async fn get_latest_proton_version(dirs: &CellarDirectories) -> Result<String> {
     Ok(proton_runners[0].version.clone())
 }
 
-/// Check if a Proton version is available for download
+/// Checks if a specified Proton version is available for download.
+///
+/// Attempts to find an exact or partial match for the given version string among available Proton releases.
+/// Returns the matched version string if found.
+///
+/// # Arguments
+///
+/// - `version`: The Proton version to search for. Can be a full or partial version string.
+///
+/// # Returns
+///
+/// The matched Proton version string if available.
+///
+/// # Errors
+///
+/// Returns an error if the specified version cannot be found among available releases.
 async fn check_proton_version_available(
     proton_manager: &ProtonManager,
     version: &str,
@@ -552,7 +701,18 @@ async fn check_proton_version_available(
     ))
 }
 
-/// Prompt user for permission to download a Proton version
+/// Prompts the user to confirm downloading a specified Proton version.
+///
+/// Displays a prompt and reads user input from stdin. Returns `true` if the user responds with "y" or "yes" (case-insensitive), otherwise returns `false`.
+///
+/// # Arguments
+///
+/// * `version` - The Proton version to prompt for.
+///
+/// # Returns
+///
+/// `Ok(true)` if the user confirms the download, `Ok(false)` otherwise. Returns an error if I/O operations fail.
+#[allow(clippy::unused_async)]
 async fn prompt_user_for_download(version: &str) -> Result<bool> {
     use std::io::{self, Write};
 
@@ -566,7 +726,18 @@ async fn prompt_user_for_download(version: &str) -> Result<bool> {
     Ok(input == "y" || input == "yes")
 }
 
-/// Download and install a Proton version
+/// Downloads and installs the specified Proton version, then refreshes the runner cache.
+///
+/// # Arguments
+///
+/// * `version` - The Proton version to download and install (e.g., "GE-Proton10-10").
+///
+/// # Examples
+///
+/// ```
+/// let manager = ProtonManager::new();
+/// download_and_install_proton(&manager, "GE-Proton10-10").await.unwrap();
+/// ```
 async fn download_and_install_proton(proton_manager: &ProtonManager, version: &str) -> Result<()> {
     println!("Downloading Proton version: {version}");
 
@@ -860,6 +1031,20 @@ async fn show_available_runners() -> Result<()> {
     Ok(())
 }
 
+/// Installs a Proton-GE or DXVK runner of the specified version.
+///
+/// Downloads and installs the requested runner type and version, then refreshes the local runner cache. Returns an error if the runner type is unsupported or installation fails.
+///
+/// # Parameters
+/// - `runner_type`: The type of runner to install ("proton" or "dxvk").
+/// - `version`: The version string of the runner to install.
+///
+/// # Examples
+///
+/// ```
+/// install_runner("proton", "GE-Proton10-10").await?;
+/// install_runner("dxvk", "2.2").await?;
+/// ```
 async fn install_runner(runner_type: &str, version: &str) -> Result<()> {
     let dirs = CellarDirectories::new()?;
     let runners_path = dirs.get_runners_path();
@@ -1337,6 +1522,24 @@ async fn run_in_prefix(prefix: &str, exe: &str, proton_version: Option<&str>) ->
     Ok(())
 }
 
+/// Installs a specified DXVK version into a Wine prefix.
+///
+/// Searches for the given DXVK version among locally installed runners and installs its DLLs into the target Wine prefix. Returns an error if the prefix or DXVK version is not found.
+///
+/// # Arguments
+///
+/// * `version` - The DXVK version to install (exact or substring match).
+/// * `prefix_name` - The name of the Wine prefix to install DXVK into.
+///
+/// # Errors
+///
+/// Returns an error if the prefix does not exist or the specified DXVK version is not installed.
+///
+/// # Examples
+///
+/// ```
+/// install_dxvk_to_prefix("2.3", "my-game-prefix").await?;
+/// ```
 async fn install_dxvk_to_prefix(version: &str, prefix_name: &str) -> Result<()> {
     let dirs = CellarDirectories::new()?;
     let prefix_path = dirs.get_prefixes_path().join(prefix_name);
@@ -1367,6 +1570,22 @@ async fn install_dxvk_to_prefix(version: &str, prefix_name: &str) -> Result<()> 
 }
 
 // Shortcut management functions
+/// Handles desktop shortcut and icon management commands asynchronously.
+///
+/// Dispatches the specified `ShortcutCommands` variant to the corresponding shortcut or icon operation, such as creating, removing, syncing, or listing desktop shortcuts, or extracting and listing game icons.
+///
+/// # Returns
+/// Returns `Ok(())` if the command completes successfully, or an error if the operation fails.
+///
+/// # Examples
+///
+/// ```
+/// use crate::cli::commands::{handle_shortcut_command, ShortcutCommands};
+///
+/// # tokio_test::block_on(async {
+/// handle_shortcut_command(ShortcutCommands::Sync).await.unwrap();
+/// # });
+/// ```
 pub async fn handle_shortcut_command(command: ShortcutCommands) -> Result<()> {
     match command {
         ShortcutCommands::Create { name } => create_shortcut(&name).await,
@@ -1378,6 +1597,19 @@ pub async fn handle_shortcut_command(command: ShortcutCommands) -> Result<()> {
     }
 }
 
+/// Creates a desktop shortcut for the specified game.
+///
+/// The shortcut uses the sanitized game name as its identifier and is configured based on the game's settings.
+///
+/// # Arguments
+///
+/// * `game_name` - The name of the game for which to create a desktop shortcut.
+///
+/// # Examples
+///
+/// ```
+/// create_shortcut("My Game").await?;
+/// ```
 async fn create_shortcut(game_name: &str) -> Result<()> {
     let dirs = CellarDirectories::new()?;
     let config = load_game_config(&dirs, game_name)?;
@@ -1389,16 +1621,47 @@ async fn create_shortcut(game_name: &str) -> Result<()> {
     Ok(())
 }
 
+/// Removes the desktop shortcut for the specified game.
+///
+/// # Arguments
+///
+/// * `game_name` - The name of the game whose desktop shortcut should be removed.
+///
+/// # Examples
+///
+/// ```
+/// remove_shortcut("Portal 2").await?;
+/// ```
 async fn remove_shortcut(game_name: &str) -> Result<()> {
     desktop::remove_desktop_shortcut(game_name)?;
     Ok(())
 }
 
+/// Synchronizes all desktop shortcuts for configured games.
+///
+/// Ensures that desktop shortcuts are up to date with the current game configurations by creating, updating, or removing shortcuts as needed.
+///
+/// # Examples
+///
+/// ```
+/// sync_shortcuts().await?;
+/// ```
 async fn sync_shortcuts() -> Result<()> {
     desktop::sync_desktop_shortcuts().await?;
     Ok(())
 }
 
+/// Lists all desktop shortcuts for managed games.
+///
+/// Prints the paths of all detected desktop shortcuts to the console. If no shortcuts are found, notifies the user.
+///
+/// # Examples
+///
+/// ```
+/// tokio_test::block_on(async {
+///     list_shortcuts().unwrap();
+/// });
+/// ```
 async fn list_shortcuts() -> Result<()> {
     let shortcuts = desktop::list_desktop_shortcuts()?;
 
@@ -1414,6 +1677,23 @@ async fn list_shortcuts() -> Result<()> {
     Ok(())
 }
 
+/// Extracts the icon from a game's executable and saves it for use with desktop shortcuts.
+///
+/// Attempts to extract an icon from the specified game's executable. If successful, saves the icon and prints its path; otherwise, prints a message indicating that no icon could be extracted.
+///
+/// # Arguments
+///
+/// * `game_name` - The name of the game whose icon should be extracted.
+///
+/// # Errors
+///
+/// Returns an error if the game configuration cannot be loaded or if icon extraction fails.
+///
+/// # Examples
+///
+/// ```
+/// extract_icon("MyGame").await?;
+/// ```
 async fn extract_icon(game_name: &str) -> Result<()> {
     let dirs = CellarDirectories::new()?;
     let config = load_game_config(&dirs, game_name)?;
@@ -1440,6 +1720,16 @@ async fn extract_icon(game_name: &str) -> Result<()> {
     Ok(())
 }
 
+/// Lists all extracted game icons.
+///
+/// Prints the names of all extracted game icons, or a message if none are found.
+///
+/// # Examples
+///
+/// ```
+/// // Asynchronously list all extracted game icons.
+/// list_icons().await.unwrap();
+/// ```
 async fn list_icons() -> Result<()> {
     let icons = desktop::list_game_icons()?;
 
