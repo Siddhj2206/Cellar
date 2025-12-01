@@ -18,7 +18,7 @@ Cellar is a command-line tool designed to make managing Wine prefixes and Window
 
 ### Prerequisites
 
-- Rust (1.70+)
+- Rust (1.80+)
 - Wine
 - `umu launcher` (for Proton support)
 - `wineboot` (for Wine prefix creation)
